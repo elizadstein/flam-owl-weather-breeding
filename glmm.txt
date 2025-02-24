@@ -1,0 +1,30 @@
+
+model {
+
+# Priors
+for (i in 1:n.groups){
+alpha[i] ~ dnorm(mu.int, tau.int)
+beta[i] ~ dnorm(mu.beta, tau.beta)
+sigma[i] ~ dunif(mu.sigma, tau.sigma)
+}
+
+mu.int ~ dnorm(0, 0.001)		# Hyperparam for random intercepts
+tau.int <- 1 / (sigma.int * sigma.int)
+sigma.int ~ dunif(0, 10)
+
+mu.beta ~ dnorm(0, 0.001)		# Hyperparam for random slopes
+tau.beta <- 1 / (sigma.beta * sigma.beta)
+sigma.beta ~ dunif(0, 10)
+
+mu.sigma ~ dnorm(0, 0.001)		# Hyperparam for sigma
+tau.sigma <- 1 / (sigma.sigma * sigma.sigma)
+sigma.sigma ~ dunif(0, 10)
+
+# Likelihood
+for (i in 1:n) {
+y[i] ~ dnorm(mu[i], tau.sigma)
+mu[i] <- alpha[band[i]] + beta[band[i]]*x[i]
+}
+
+}
+

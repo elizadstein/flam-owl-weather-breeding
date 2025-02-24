@@ -1,0 +1,34 @@
+
+model {
+
+# Priors
+alpha ~ dnorm(0,0.001)
+beta ~ dnorm(0,0.001)
+sigma ~ dunif(0, 100)
+
+# Likelihood
+for (i in 1:n) {
+y[i] ~ dnorm(mu[i], tau)
+mu[i] <- alpha + beta*x[i]
+}
+
+# Derived quantities
+tau <- 1/ (sigma * sigma)
+p.decline <- 1-step(beta) # Probability of decline
+
+# Assess model fit using a sums-of-squares-type discrepancy
+for (i in 1:n) {
+residual[i] <- y[i]-mu[i] # Residuals for observed data
+predicted[i] <- mu[i] # Predicted values
+sq[i] <- pow(residual[i], 2) # Squared residuals for observed data
+
+# Generate replicate data and compute fit stats for them
+y.new[i] ~ dnorm(mu[i], tau) # one new data set at each MCMC iteration
+sq.new[i] <- pow(y.new[i]-predicted[i], 2) # Squared residuals for new data
+}
+fit <- sum(sq[]) # Sum of squared residuals for actual data set
+fit.new <- sum(sq.new[]) # Sum of squared residuals for new data set
+test <- step(fit.new - fit) # Test whether new data set more extreme
+bpvalue <- mean(test) # Bayesian p-value
+}
+

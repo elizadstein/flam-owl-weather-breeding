@@ -1,0 +1,30 @@
+
+model {
+
+# Priors
+alpha ~ dnorm(0, 0.001)      # Precision = 1/variance
+beta ~ dnorm(0, 0.001)      # Large variance = small precision
+
+
+# Likelihood: 
+for (i in 1:n){                           # loop over observation i to n
+   y[i] ~ dpois(lambda[i])                # 1. Distribution for random part
+   log(lambda[i]) <- alpha + beta * x[i]  # 2. Linear predictor
+
+
+# Fit assessments
+Presi[i] <- (y[i] - lambda[i]) / sqrt(lambda[i])    # Pearson residuals
+y.new[i] ~ dpois(lambda[i])                         # Replicate data set
+Presi.new[i] <- (y.new[i] - lambda[i]) / sqrt(lambda[i])      # Pearson resi
+D[i] <- pow(Presi[i], 2)
+D.new[i] <- pow(Presi.new[i], 2)
+
+
+}  # end i loop
+
+# Add up discrepancy measures
+fit <- sum(D[])
+fit.new <- sum(D.new[])
+
+} # end model
+

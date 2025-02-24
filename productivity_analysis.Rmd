@@ -1,0 +1,698 @@
+---
+title: "Productivity vs. Climate Analysis"
+output:
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+## Libraries
+
+```{r}
+library(R2jags)
+library(tidyverse)
+```
+
+## Load PD Data
+
+```{r}
+prod.climate <- read.csv("productivity_data.csv")
+
+# Separate into wet, dry, warm, and cold
+prod.climate.wet <- filter(prod.climate, wet_dry == "Wet")
+prod.climate.dry <- filter(prod.climate, wet_dry == "Dry")
+prod.climate.warm <- filter(prod.climate, warm_cold == "Warm")
+prod.climate.cold <- filter(prod.climate, warm_cold == "Cold")
+
+```
+
+
+# Bayesian Model of the Mean
+
+Define Poisson t-test model:
+
+```{r}
+####### FIT MODEL IN JAGS    ################
+#############################################
+
+# Define the model in the BUGS language and write a text file
+
+sink("Poisson.t.test.txt")
+cat("
+model {
+
+# Priors
+alpha ~ dnorm(0, 0.001)      # Precision = 1/variance
+beta ~ dnorm(0, 0.001)      # Large variance = small precision
+
+
+# Likelihood: 
+for (i in 1:n){                           # loop over observation i to n
+   y[i] ~ dpois(lambda[i])                # 1. Distribution for random part
+   log(lambda[i]) <- alpha + beta * x[i]  # 2. Linear predictor
+
+
+# Fit assessments
+Presi[i] <- (y[i] - lambda[i]) / sqrt(lambda[i])    # Pearson residuals
+y.new[i] ~ dpois(lambda[i])                         # Replicate data set
+Presi.new[i] <- (y.new[i] - lambda[i]) / sqrt(lambda[i])      # Pearson resi
+D[i] <- pow(Presi[i], 2)
+D.new[i] <- pow(Presi.new[i], 2)
+
+
+}  # end i loop
+
+# Add up discrepancy measures
+fit <- sum(D[])
+fit.new <- sum(D.new[])
+
+} # end model
+",fill = TRUE)
+sink()
+
+
+
+############################
+```
+
+
+### Clutch vs. Precip
+
+```{r eval=FALSE, include=FALSE}
+
+# Bundle data
+win.data <- list(y = prod.climate$clutch, 
+             x = as.numeric(prod.climate$wet_dry) - 1, 
+             n = nrow(prod.climate))
+
+# Confirm clutch estimates with simple t.test
+#t.test(prod.climate$clutch ~ as.factor(prod.climate$wet_dry))
+
+#Initial values
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta", "fit", "fit.new", "y.new", "Presi")
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 4000
+nt <- 2
+
+# Do the MCMC stuff calling JAGS from R
+out.clutch.precip <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+
+```
+
+
+### Clutch vs. Temp
+
+```{r eval=FALSE, include=FALSE}
+
+# Bundle data
+win.data <- list(y = prod.climate$clutch, 
+             x = as.numeric(prod.climate$warm_cold) - 1, 
+             n = nrow(prod.climate))
+
+# Initial values
+
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta","fit", "fit.new", "y.new", "Presi",)
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 4000
+nt <- 2
+
+
+# Do the MCMC stuff calling JAGS from R
+out.clutch.temp <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+
+```
+
+### Brood vs. Precip
+
+```{r eval=FALSE, include=FALSE}
+# Bundle data
+win.data <- list(y = prod.climate$brood, 
+             x = as.numeric(prod.climate$wet_dry) - 1, 
+             n = nrow(prod.climate))
+
+# Initial values
+
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta","Presi","fit", "fit.new", "y.new")#, "mu")
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 4000
+nt <- 2
+
+
+
+# Do the MCMC stuff calling JAGS from R
+out.brood.precip <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+
+```
+
+### Brood vs. Temp
+
+```{r eval=FALSE, include=FALSE}
+# Bundle data
+win.data <- list(y = prod.climate$brood, 
+             x = as.numeric(prod.climate$warm_cold) - 1, 
+             n = nrow(prod.climate))
+
+# Initial values
+
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta","Presi","fit", "fit.new", "y.new")#, "mu")
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 4000
+nt <- 2
+
+
+
+# Do the MCMC stuff calling JAGS from R
+out.brood.temp <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+```
+
+### Fledge vs. Precip
+
+```{r eval=FALSE, include=FALSE}
+# Bundle data
+win.data <- list(y = prod.climate$fledge, 
+             x = as.numeric(prod.climate$wet_dry) - 1, 
+             n = nrow(prod.climate))
+
+# Initial values
+
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta","Presi","fit", "fit.new", "y.new")#, "mu")
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 5000
+nt <- 2
+
+
+
+# Do the MCMC stuff calling JAGS from R
+out.fledge.precip <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+```
+
+### Fledge vs. Temp
+
+```{r eval=FALSE, include=FALSE}
+# Bundle data
+win.data <- list(y = prod.climate$fledge, 
+             x = as.numeric(prod.climate$warm_cold) - 1, 
+             n = nrow(prod.climate))
+
+# Initial values
+
+inits <- function(){list(alpha = rlnorm(1), beta = rlnorm(1))}
+
+# Parameters to estimate/keep track of
+param <- c("alpha","beta","Presi","fit", "fit.new", "y.new")#, "mu")
+
+# MCMC settings
+nc <- 3
+ni <- 20000
+nb <- 5000
+nt <- 2
+
+
+# Do the MCMC stuff calling JAGS from R
+out.fledge.temp <- jags(data = win.data, inits = inits, parameters.to.save = param, 
+model.file = "Poisson.t.test.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+```
+
+
+# Extract Model Data
+
+Clutch Size vs. Precip
+
+```{r}
+# Summarize the result
+print(out.clutch.precip, dig = 3)
+
+# Extract estimates
+alpha.post.clutch.precip <- as.vector(out.clutch.precip$BUGSoutput$sims.list$alpha) 
+beta.post.clutch.precip <- as.vector(out.clutch.precip$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.clutch.precip <- data.frame(
+  "mean" = c(exp(alpha.post.clutch.precip), exp(beta.post.clutch.precip + alpha.post.clutch.precip)), 
+  "wet_dry" = c(rep("Dry", length(alpha.post.clutch.precip)), # Dry = alpha
+                  rep("Wet", length(beta.post.clutch.precip))), # Wet = beta
+  "stage" = "clutch")
+```
+
+Clutch Size vs. Temp
+
+```{r}
+
+# Summarize the result
+print(out.clutch.temp, dig = 3)
+
+# Extract estimates
+
+alpha.post.clutch.temp <- as.vector(out.clutch.temp$BUGSoutput$sims.list$alpha)
+beta.post.clutch.temp <- as.vector(out.clutch.temp$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.clutch.temp <- data.frame(
+  "mean" = c(exp(alpha.post.clutch.temp), exp(beta.post.clutch.temp + alpha.post.clutch.temp)), # Exponentiate alpha and beta b/c they were log transformed in the model (log link)
+  "warm_cold" = c(rep("Cold", length(alpha.post.clutch.temp)), # Cold = alpha
+                  rep("Warm", length(beta.post.clutch.temp))), # Warm = beta
+  "stage" = "clutch")
+
+```
+
+Brood Size vs. Precip
+
+```{r}
+
+# Summarize the result
+print(out.brood.precip, dig = 3)
+
+# Extract estimates
+
+alpha.post.brood.precip <- as.vector(out.brood.precip$BUGSoutput$sims.list$alpha)
+beta.post.brood.precip <- as.vector(out.brood.precip$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.brood.precip <- data.frame(
+  "mean" = c(exp(alpha.post.brood.precip), exp(beta.post.brood.precip + alpha.post.brood.precip)), # Exponentiate alpha and beta b/c they were log transformed in the model (log link)
+  "wet_dry" = c(rep("Dry", length(alpha.post.brood.precip)), # Dry = alpha
+                  rep("Wet", length(beta.post.brood.precip))), # Wet = beta
+  "stage" = "brood")
+```
+
+Brood Size vs. Temp
+
+```{r}
+
+# Summarize the result
+print(out.brood.temp, dig = 3)
+
+# Extract estimates
+
+alpha.post.brood.temp <- as.vector(out.brood.temp$BUGSoutput$sims.list$alpha)
+beta.post.brood.temp <- as.vector(out.brood.temp$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.brood.temp <- data.frame(
+  "mean" = c(exp(alpha.post.brood.temp), exp(beta.post.brood.temp + alpha.post.brood.temp)), # Exponentiate alpha and beta b/c they were log transformed in the model (log link)
+  "warm_cold" = c(rep("Cold", length(alpha.post.brood.temp)), # Cold = alpha
+                  rep("Warm", length(beta.post.brood.temp))), # Warm = beta
+  "stage" = "brood")
+```
+
+Fledglings vs. Precip
+
+```{r}
+
+# Summarize the result
+print(out.fledge.precip, dig = 3)
+
+# Extract estimates
+
+alpha.post.fledge.precip <- as.vector(out.fledge.precip$BUGSoutput$sims.list$alpha)
+beta.post.fledge.precip <- as.vector(out.fledge.precip$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.fledge.precip <- data.frame(
+  "mean" = c(exp(alpha.post.fledge.precip), exp(beta.post.fledge.precip + alpha.post.fledge.precip)), # Exponentiate alpha and beta b/c they were log transformed in the model (log link)
+  "wet_dry" = c(rep("Dry", length(alpha.post.fledge.precip)), # Dry = alpha
+                  rep("Wet", length(beta.post.fledge.precip))), # Wet = beta
+  "stage" = "fledge")
+```
+
+Fledglings vs. Temp
+
+```{r}
+
+# Summarize the result
+print(out.fledge.temp, dig = 3)
+
+# Extract estimates
+
+alpha.post.fledge.temp <- as.vector(out.fledge.temp$BUGSoutput$sims.list$alpha)
+beta.post.fledge.temp <- as.vector(out.fledge.temp$BUGSoutput$sims.list$beta)
+
+# create dataframe with posteriors
+posteriors.fledge.temp <- data.frame(
+  "mean" = c(exp(alpha.post.fledge.temp), exp(beta.post.fledge.temp + alpha.post.fledge.temp)), # Exponentiate alpha and beta b/c they were log transformed in the model (log link)
+  "warm_cold" = c(rep("Cold", length(alpha.post.fledge.temp)), # Cold = alpha
+                  rep("Warm", length(beta.post.fledge.temp))), # Warm = beta
+  "stage" = "fledge")
+```
+
+# Summarize Model Findings
+
+Create dataframe with posteriors for clutch, brood, and fledglings
+
+```{r}
+posteriors.all.precip <- rbind(posteriors.clutch.precip, posteriors.brood.precip, posteriors.fledge.precip)
+
+posteriors.all.temp <- rbind(posteriors.clutch.temp, posteriors.brood.temp, posteriors.fledge.temp)
+
+```
+
+Create model summary table
+```{r}
+
+productivity.precip.summary <- data.frame(
+  variable = c("Precipitation", 
+               "Precipitation", 
+               "Precipitation",
+               "Precipitation", 
+               "Precipitation", 
+               "Precipitation"),
+  stage = c("Clutch",
+            "Clutch",
+            "Brood",
+            "Brood",
+            "Fledgling",
+            "Fledgling"),
+  param = c("alpha",
+            "beta",
+            "alpha",
+            "beta",
+            "alpha",
+            "beta"),
+  mean = c(out.clutch.precip$BUGSoutput$mean$alpha, 
+           out.clutch.precip$BUGSoutput$mean$beta,
+           out.brood.precip$BUGSoutput$mean$alpha,
+           out.brood.precip$BUGSoutput$mean$beta, 
+           out.fledge.precip$BUGSoutput$mean$alpha,
+           out.fledge.precip$BUGSoutput$mean$beta),
+  lower = c(quantile(out.clutch.precip$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.clutch.precip$BUGSoutput$sims.list$beta, 0.275),
+            quantile(out.brood.precip$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.brood.precip$BUGSoutput$sims.list$beta, 0.275),
+            quantile(out.fledge.precip$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.fledge.precip$BUGSoutput$sims.list$beta, 0.275)),
+  upper = c(quantile(out.clutch.precip$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.clutch.precip$BUGSoutput$sims.list$beta, 0.975),
+            quantile(out.brood.precip$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.brood.precip$BUGSoutput$sims.list$beta, 0.975),
+            quantile(out.fledge.precip$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.fledge.precip$BUGSoutput$sims.list$beta, 0.975)),
+  Rhat = c(out.clutch.precip$BUGSoutput$summary[1,8],
+           out.clutch.precip$BUGSoutput$summary[2,8],
+           out.brood.precip$BUGSoutput$summary[1,8],
+           out.brood.precip$BUGSoutput$summary[2,8],
+           out.fledge.precip$BUGSoutput$summary[1,8],
+           out.fledge.precip$BUGSoutput$summary[2,8])
+)
+
+
+productivity.temp.summary <- data.frame(
+  variable = c("Temperature", 
+               "Temperature", 
+               "Temperature",
+               "Temperature", 
+               "Temperature", 
+               "Temperature"),
+  stage = c("Clutch",
+            "Clutch",
+            "Brood",
+            "Brood",
+            "Fledgling",
+            "Fledgling"),
+  param = c("alpha",
+            "beta",
+            "alpha",
+            "beta",
+            "alpha",
+            "beta"),
+  mean = c(out.clutch.temp$BUGSoutput$mean$alpha, 
+           out.clutch.temp$BUGSoutput$mean$beta,
+           out.brood.temp$BUGSoutput$mean$alpha,
+           out.brood.temp$BUGSoutput$mean$beta, 
+           out.fledge.temp$BUGSoutput$mean$alpha,
+           out.fledge.temp$BUGSoutput$mean$beta),
+  lower = c(quantile(out.clutch.temp$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.clutch.temp$BUGSoutput$sims.list$beta, 0.275),
+            quantile(out.brood.temp$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.brood.temp$BUGSoutput$sims.list$beta, 0.275),
+            quantile(out.fledge.temp$BUGSoutput$sims.list$alpha, 0.275),
+            quantile(out.fledge.temp$BUGSoutput$sims.list$beta, 0.275)),
+  upper = c(quantile(out.clutch.temp$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.clutch.temp$BUGSoutput$sims.list$beta, 0.975),
+            quantile(out.brood.temp$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.brood.temp$BUGSoutput$sims.list$beta, 0.975),
+            quantile(out.fledge.temp$BUGSoutput$sims.list$alpha, 0.975),
+            quantile(out.fledge.temp$BUGSoutput$sims.list$beta, 0.975)),
+  Rhat = c(out.clutch.temp$BUGSoutput$summary[1,8],
+           out.clutch.temp$BUGSoutput$summary[2,8],
+           out.brood.temp$BUGSoutput$summary[1,8],
+           out.brood.temp$BUGSoutput$summary[2,8],
+           out.fledge.temp$BUGSoutput$summary[1,8],
+           out.fledge.temp$BUGSoutput$summary[2,8])
+)
+
+productivity.model.summary <- rbind(
+  productivity.precip.summary, productivity.temp.summary
+)
+
+```
+
+
+## Evaluating Model Fit
+
+Trace plots (alpha):
+
+```{r}
+
+# Clutch Precip
+a.a <- lattice::xyplot(out.clutch.precip$BUGSoutput$sims.list$alpha ~ 1:length(out.clutch.precip$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Clutch Precip")
+
+# Clutch Temp
+a.b <- lattice::xyplot(out.clutch.temp$BUGSoutput$sims.list$alpha ~ 1:length(out.clutch.temp$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Clutch Temp")
+
+# Brood Precip
+a.c <- lattice::xyplot(out.brood.precip$BUGSoutput$sims.list$alpha ~ 1:length(out.brood.precip$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Brood Precip")
+
+# Brood Temp
+a.d <- lattice::xyplot(out.brood.temp$BUGSoutput$sims.list$alpha ~ 1:length(out.brood.temp$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Brood Temp")
+
+# Fledge Precip
+a.e <- lattice::xyplot(out.fledge.precip$BUGSoutput$sims.list$alpha ~ 1:length(out.fledge.precip$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Fledge Precip")
+
+# Fledge Temp
+a.f <- lattice::xyplot(out.fledge.temp$BUGSoutput$sims.list$alpha ~ 1:length(out.fledge.temp$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Fledge Temp")
+
+grid.arrange(a.a, a.b, a.c, a.d, a.e, a.f, ncol = 2)
+```
+
+Trace plots (beta):
+
+```{r}
+
+# Clutch Precip
+b.a <- lattice::xyplot(out.clutch.precip$BUGSoutput$sims.list$beta ~ 1:length(out.clutch.precip$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Clutch Precip")
+
+# Clutch Temp
+b.b <- lattice::xyplot(out.clutch.temp$BUGSoutput$sims.list$beta ~ 1:length(out.clutch.temp$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Clutch Temp")
+
+# Brood Precip
+b.c <- lattice::xyplot(out.brood.precip$BUGSoutput$sims.list$beta ~ 1:length(out.brood.precip$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Brood Precip")
+
+# Brood Temp
+b.d <- lattice::xyplot(out.brood.temp$BUGSoutput$sims.list$beta ~ 1:length(out.brood.temp$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Brood Temp")
+
+# Fledge Precip
+b.e <- lattice::xyplot(out.fledge.precip$BUGSoutput$sims.list$beta ~ 1:length(out.fledge.precip$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Fledge Precip")
+
+# Fledge Temp
+b.f <- lattice::xyplot(out.fledge.temp$BUGSoutput$sims.list$beta ~ 1:length(out.fledge.temp$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "Beta", main = "Fledge Temp")
+
+grid.arrange(b.a, b.b, b.c, b.d, b.e, b.f, ncol = 2)
+```
+
+Rhat values:
+
+```{r}
+
+list.rhat <- list(
+  clutch_precip = which(out.clutch.precip$BUGSoutput$summary[,8] > 1.1),
+  clutch_temp = which(out.clutch.temp$BUGSoutput$summary[,8] > 1.1),
+  brood_precip = which(out.brood.precip$BUGSoutput$summary[,8] > 1.1),
+  brood_temp = which(out.brood.temp$BUGSoutput$summary[,8] > 1.1),
+  fledge_precip = which(out.fledge.precip$BUGSoutput$summary[,8] > 1.1),
+  fledge_temp = which(out.fledge.temp$BUGSoutput$summary[,8] > 1.1)
+)
+
+list.rhat
+
+```
+
+Pearson residuals:
+
+```{r}
+par(mfrow=c(3,2))
+
+plot(out.clutch.precip$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Clutch Precip")
+abline(h = 0)
+
+plot(out.clutch.temp$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Clutch Temp")
+abline(h = 0)
+
+plot(out.brood.precip$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Brood Precip")
+abline(h = 0)
+
+plot(out.brood.temp$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Brood Temp")
+abline(h = 0)
+
+plot(out.fledge.precip$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Fledge Precip")
+abline(h = 0)
+
+plot(out.fledge.temp$BUGSoutput$mean$Presi, las = 1, ylab = "Pearson Resid", main = "Fledge Temp")
+abline(h = 0)
+```
+
+
+
+## Evaluating for Difference
+
+### Wet vs. Dry years
+
+Check credible intervals
+
+```{r}
+## Custom function to get quantiles (prob) from a given vector (vec):
+getQuant <- function(vec, prob){
+  quantile(vec, probs = prob, names = FALSE)
+}
+
+### Create df with predictions clutch size
+predictions.clutch.precip <- data.frame(dry.clutch = alpha.post.clutch.precip, wet.clutch = (beta.post.clutch.precip + alpha.post.clutch.precip))
+# dry = alpha (intercept)
+# wet = alpha (intercept) + beta
+
+quant.predictions.clutch.precip <- cbind(data.frame(
+  lower_95 = apply(X = predictions.clutch.precip, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.clutch.precip, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.clutch.precip, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.clutch.precip, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Create df with predictions for brood size
+predictions.brood.precip <- data.frame(dry.brood = alpha.post.brood.precip, wet.brood = (beta.post.brood.precip + alpha.post.brood.precip))
+# dry = alpha (intercept)
+# wet = alpha (intercept) + beta
+
+quant.predictions.brood.precip <- cbind(data.frame(
+  lower_95 = apply(X = predictions.brood.precip, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.brood.precip, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.brood.precip, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.brood.precip, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Create df with predictions for fledgelings
+predictions.fledge.precip <- data.frame(dry.fledge = alpha.post.brood.precip, wet.fledge = (beta.post.brood.precip + alpha.post.brood.precip))
+# dry = alpha (intercept)
+# wet = alpha (intercept) + beta
+
+quant.predictions.fledge.precip <- cbind(data.frame(
+  lower_95 = apply(X = predictions.fledge.precip, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.fledge.precip, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.fledge.precip, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.fledge.precip, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Combine into one df
+quant.predictions.all.precip <- rbind(
+  quant.predictions.clutch.precip, quant.predictions.brood.precip, quant.predictions.fledge.precip
+)
+
+quant.predictions.all.precip
+
+# can see that they largely overlap
+```
+
+### Warm vs. Cold years
+
+Check credible intervals
+
+```{r}
+## Custom function to get quantiles (prob) from a given vector (vec):
+getQuant <- function(vec, prob){
+  quantile(vec, probs = prob, names = FALSE)
+}
+
+### Create df with predictions clutch size
+predictions.clutch.temp <- data.frame(cold.clutch = alpha.post.clutch.temp, warm.clutch = (beta.post.clutch.temp + alpha.post.clutch.temp))
+# cold = alpha (intercept)
+# warm = alpha (intercept) + beta
+
+quant.predictions.clutch.temp <- cbind(data.frame(
+  lower_95 = apply(X = predictions.clutch.temp, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.clutch.temp, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.clutch.temp, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.clutch.temp, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Create df with predictions for brood size
+predictions.brood.temp <- data.frame(cold.brood = alpha.post.brood.temp, warm.brood = (beta.post.brood.temp + alpha.post.brood.temp))
+# cold = alpha (intercept)
+# warm = alpha (intercept) + beta
+
+quant.predictions.brood.temp <- cbind(data.frame(
+  lower_95 = apply(X = predictions.brood.temp, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.brood.temp, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.brood.temp, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.brood.temp, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Create df with predictions for fledgelings
+predictions.fledge.temp <- data.frame(cold.fledge = alpha.post.brood.temp, warm.fledge = (beta.post.brood.temp + alpha.post.brood.temp))
+# cold = alpha (intercept)
+# warm = alpha (intercept) + beta
+
+quant.predictions.fledge.temp <- cbind(data.frame(
+  lower_95 = apply(X = predictions.fledge.temp, MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = predictions.fledge.temp, MARGIN = 2, FUN = getQuant, prob = 0.975),
+  lower_80 = apply(X = predictions.fledge.temp, MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = predictions.fledge.temp, MARGIN = 2, FUN = getQuant, prob = 0.9)
+))
+
+
+### Combine into one df
+quant.predictions.all.temp <- rbind(
+  quant.predictions.clutch.temp, quant.predictions.brood.temp, quant.predictions.fledge.temp
+)
+
+quant.predictions.all.temp
+
+# can see that they largely overlap
+```

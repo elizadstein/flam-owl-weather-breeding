@@ -1,0 +1,501 @@
+---
+title: "Untitled"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load Packages
+
+```{r load_packages}
+library(R2jags)
+library(tidyverse)
+```
+
+# Read in data
+
+```{r}
+
+propClimate <- read.csv("labor_data.csv")
+
+# Create two data sets, one for wet years and one for dry years
+pd.wet <- propClimate %>%
+  filter(stage == "Nestling", nest_age < 100 & wet_dry == "Wet") 
+
+pd.dry <- propClimate %>%
+  filter(stage == "Nestling", nest_age < 100 & wet_dry == "Dry" ) 
+
+
+# Create two data sets, one for warm years (>= 5.5725 C) and one for cold years (< 5.5725)
+pd.warm <- propClimate %>%
+  filter(stage == "Nestling", nest_age < 100 & warm_cold == "Warm") 
+
+pd.cold <- propClimate %>%
+  filter(stage == "Nestling", nest_age < 100 & warm_cold == "Cold")
+
+```
+
+
+# Bayesian Linear Regression
+
+## Define model
+
+```{r}
+
+# Write model
+
+sink("beta_glm.txt")
+cat("
+
+    model {
+    
+    # Likelihood: 
+    for (i in 1:n){ 
+    y[i] ~ dbeta(a[i], b[i]) 
+    a[i] <- mu[i] * phi
+    b[i]  <- (1-mu[i]) * phi
+    logit(mu[i]) <- alpha + beta * x[i] 
+    } 
+    
+
+    # Priors and derived quantities
+    sigma ~ dunif(0, 100)
+    tau <- pow(sigma,-2) # precision
+    sigma2 <- pow(sigma,2)
+    
+    alpha ~ dnorm(0, 0.001)
+    beta ~ dnorm(0, 0.001)
+    
+    phi ~ dgamma(.1,.1)
+    
+    
+    } # end model
+", fill = TRUE)
+sink()
+
+
+```
+
+
+## Wet vs. Dry Years
+
+Run model for nest age (precipitation):
+```{r eval=FALSE, include=FALSE}
+
+## Wet Years 
+
+# Bundle data
+win.data <- list(
+  y = pd.wet$proportionF,
+  x = pd.wet$nest_age,
+  n = nrow(pd.wet)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.5, beta = 0.5, sigma = 0.5)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.nestage.wet <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+
+## Dry Years
+
+
+# Bundle data
+win.data <- list(
+  y = pd.dry$proportionF,
+  x = pd.dry$nest_age,
+  n = nrow(pd.dry)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.5, beta = 0.5, sigma = 0.5)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.nestage.dry <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+```
+
+Run model for time (precipitation):
+```{r eval=FALSE, include=FALSE}
+
+## Wet Years 
+
+# Bundle data
+win.data <- list(
+  y = pd.wet$proportionF,
+  x = pd.wet$time,
+  n = nrow(pd.wet)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.4, beta = 0.4, sigma = 0.4)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.time.wet <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+
+## Dry Years
+
+
+# Bundle data
+win.data <- list(
+  y = pd.dry$proportionF,
+  x = pd.dry$time,
+  n = nrow(pd.dry)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.4, beta = 0.4, sigma = 0.4)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.time.dry <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+```
+
+## Warm vs. Cold Years
+
+Run model for nest age (temperature):
+```{r eval=FALSE, include=FALSE}
+
+## Warm Years 
+
+# Bundle data
+win.data <- list(
+  y = pd.warm$proportionF,
+  x = pd.warm$nest_age,
+  n = nrow(pd.warm)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.5, beta = 0.5, sigma = 0.5)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.nestage.warm <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+
+## Cold Years
+
+# Bundle data
+win.data <- list(
+  y = pd.cold$proportionF,
+  x = pd.cold$nest_age,
+  n = nrow(pd.cold)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.5, beta = 0.5, sigma = 0.5)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.nestage.cold <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+```
+
+Run model for time (temperature):
+```{r eval=FALSE, include=FALSE}
+
+## Warm Years 
+
+# Bundle data
+win.data <- list(
+  y = pd.warm$proportionF,
+  x = pd.warm$time,
+  n = nrow(pd.warm)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.4, beta = 0.4, sigma = 0.4)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.time.warm <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## Cold Years
+
+# Bundle data
+win.data <- list(
+  y = pd.cold$proportionF,
+  x = pd.cold$time,
+  n = nrow(pd.cold)
+)
+
+
+# Inits function
+inits <- function(){list(alpha = 0.4, beta = 0.4, sigma = 0.4)}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "sigma", "phi")
+
+# MCMC settings
+nc = 3 ; ni = 10000 ; nb = 1000 ; nt = 1
+
+# Start Gibbs sampler
+out.time.cold <- jags(data = win.data, inits = inits, parameters = params, model =
+"beta_glm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+```
+
+
+
+# Summarize Model Findings
+
+
+```{r}
+
+lm.output.nestage <- t(data.frame(
+  estimate = c(
+    "Mean", 
+    "SD", 
+    "Upper 97.5", 
+    "Lower 2.5"),
+  nestage_wet_alpha = c(
+    out.nestage.wet$BUGSoutput$mean$alpha,
+    out.nestage.wet$BUGSoutput$sd$alpha,
+    mean(quantile(out.nestage.wet$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.nestage.wet$BUGSoutput$sims.list$alpha, 0.025))),
+  nestage_dry_alpha = c(  
+    out.nestage.dry$BUGSoutput$mean$alpha,
+    out.nestage.dry$BUGSoutput$sd$alpha,
+    mean(quantile(out.nestage.dry$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.nestage.dry$BUGSoutput$sims.list$alpha, 0.025))),
+  nestage_wet_beta = c(
+    out.nestage.wet$BUGSoutput$mean$beta,
+    out.nestage.wet$BUGSoutput$sd$beta,
+    mean(quantile(out.nestage.wet$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.nestage.wet$BUGSoutput$sims.list$beta, 0.025))),
+  nestage_dry_beta = c(  
+    out.nestage.dry$BUGSoutput$mean$beta,
+    out.nestage.dry$BUGSoutput$sd$beta,
+    mean(quantile(out.nestage.dry$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.nestage.dry$BUGSoutput$sims.list$beta, 0.025))),
+  nestage_warm_alpha = c(
+    out.nestage.warm$BUGSoutput$mean$alpha,
+    out.nestage.warm$BUGSoutput$sd$alpha,
+    mean(quantile(out.nestage.warm$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.nestage.warm$BUGSoutput$sims.list$alpha, 0.025))),
+  nestage_cold_alpha = c(  
+    out.nestage.cold$BUGSoutput$mean$alpha,
+    out.nestage.cold$BUGSoutput$sd$alpha,
+    mean(quantile(out.nestage.cold$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.nestage.cold$BUGSoutput$sims.list$alpha, 0.025))),
+  nestage_warm_beta = c(
+    out.nestage.warm$BUGSoutput$mean$beta,
+    out.nestage.warm$BUGSoutput$sd$beta,
+    mean(quantile(out.nestage.warm$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.nestage.warm$BUGSoutput$sims.list$beta, 0.025))),
+  nestage_cold_beta = c(  
+    out.nestage.cold$BUGSoutput$mean$beta,
+    out.nestage.cold$BUGSoutput$sd$beta,
+    mean(quantile(out.nestage.cold$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.nestage.cold$BUGSoutput$sims.list$beta, 0.025)))
+))
+
+lm.output.time <- t(data.frame(
+  estimate = c(
+    "Mean", 
+    "SD", 
+    "Upper 97.5", 
+    "Lower 2.5"),
+  time_wet_alpha = c(
+    out.time.wet$BUGSoutput$mean$alpha,
+    out.time.wet$BUGSoutput$sd$alpha,
+    mean(quantile(out.time.wet$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.time.wet$BUGSoutput$sims.list$alpha, 0.025))),
+  time_dry_alpha = c(  
+    out.time.dry$BUGSoutput$mean$alpha,
+    out.time.dry$BUGSoutput$sd$alpha,
+    mean(quantile(out.time.dry$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.time.dry$BUGSoutput$sims.list$alpha, 0.025))),
+  time_wet_beta = c(
+    out.time.wet$BUGSoutput$mean$beta,
+    out.time.wet$BUGSoutput$sd$beta,
+    mean(quantile(out.time.wet$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.time.wet$BUGSoutput$sims.list$beta, 0.025))),
+  time_dry_beta = c(  
+    out.time.dry$BUGSoutput$mean$beta,
+    out.time.dry$BUGSoutput$sd$beta,
+    mean(quantile(out.time.dry$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.time.dry$BUGSoutput$sims.list$beta, 0.025))),
+  time_warm_alpha = c(
+    out.time.warm$BUGSoutput$mean$alpha,
+    out.time.warm$BUGSoutput$sd$alpha,
+    mean(quantile(out.time.warm$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.time.warm$BUGSoutput$sims.list$alpha, 0.025))),
+  time_cold_alpha = c(  
+    out.time.cold$BUGSoutput$mean$alpha,
+    out.time.cold$BUGSoutput$sd$alpha,
+    mean(quantile(out.time.cold$BUGSoutput$sims.list$alpha, 0.975)),
+    mean(quantile(out.time.cold$BUGSoutput$sims.list$alpha, 0.025))),
+  time_warm_beta = c(
+    out.time.warm$BUGSoutput$mean$beta,
+    out.time.warm$BUGSoutput$sd$beta,
+    mean(quantile(out.time.warm$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.time.warm$BUGSoutput$sims.list$beta, 0.025))),
+  time_cold_beta = c(  
+    out.time.cold$BUGSoutput$mean$beta,
+    out.time.cold$BUGSoutput$sd$beta,
+    mean(quantile(out.time.cold$BUGSoutput$sims.list$beta, 0.975)),
+    mean(quantile(out.time.cold$BUGSoutput$sims.list$beta, 0.025)))
+))
+
+# combine dfs
+lm.output.all <- rbind(lm.output.nestage[2:9,], lm.output.time[2:9,])
+
+# Rename columns
+colnames(lm.output.all) <- c("Mean", "SD", "Upper 97.5", "Lower 2.5")
+
+
+```
+
+
+
+# Evaluating Model Fit
+
+Trace plots (alpha):
+
+```{r}
+windows()
+
+a.a <- lattice::xyplot(out.nestage.wet$BUGSoutput$sims.list$alpha ~ 1:length(out.nestage.wet$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Nestage Wet")
+
+
+a.b <- lattice::xyplot(out.nestage.dry$BUGSoutput$sims.list$alpha ~ 1:length(out.nestage.dry$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Nestage Dry")
+
+
+a.c <- lattice::xyplot(out.time.wet$BUGSoutput$sims.list$alpha ~ 1:length(out.time.wet$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Time Wet")
+
+
+a.d <- lattice::xyplot(out.time.dry$BUGSoutput$sims.list$alpha ~ 1:length(out.time.dry$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Time Dry")
+
+
+a.e <- lattice::xyplot(out.nestage.warm$BUGSoutput$sims.list$alpha ~ 1:length(out.nestage.warm$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Nestage Warm")
+
+
+a.f <- lattice::xyplot(out.nestage.cold$BUGSoutput$sims.list$alpha ~ 1:length(out.nestage.cold$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Nestage Cold")
+
+
+a.g <- lattice::xyplot(out.time.warm$BUGSoutput$sims.list$alpha ~ 1:length(out.time.warm$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Time Warm")
+
+
+a.h <- lattice::xyplot(out.time.cold$BUGSoutput$sims.list$alpha ~ 1:length(out.time.cold$BUGSoutput$sims.list$alpha), type = "l", xlab = "Length", ylab = "Alpha", main = "Time Cold")
+
+grid.arrange(a.a, a.b, a.c, a.d, a.e, a.f, a.g, a.h, ncol = 2)
+```
+
+Trace plots (beta):
+
+```{r}
+windows()
+
+b.a <- lattice::xyplot(out.nestage.wet$BUGSoutput$sims.list$beta ~ 1:length(out.nestage.wet$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Nestage Wet")
+
+
+b.b <- lattice::xyplot(out.nestage.dry$BUGSoutput$sims.list$beta ~ 1:length(out.nestage.dry$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Nestage Dry")
+
+
+b.c <- lattice::xyplot(out.time.wet$BUGSoutput$sims.list$beta ~ 1:length(out.time.wet$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Time Wet")
+
+
+b.d <- lattice::xyplot(out.time.dry$BUGSoutput$sims.list$beta ~ 1:length(out.time.dry$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Time Dry")
+
+
+b.e <- lattice::xyplot(out.nestage.warm$BUGSoutput$sims.list$beta ~ 1:length(out.nestage.warm$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Nestage Warm")
+
+
+b.f <- lattice::xyplot(out.nestage.cold$BUGSoutput$sims.list$beta ~ 1:length(out.nestage.cold$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Nestage Cold")
+
+
+b.g <- lattice::xyplot(out.time.warm$BUGSoutput$sims.list$beta ~ 1:length(out.time.warm$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Time Warm")
+
+
+b.h <- lattice::xyplot(out.time.cold$BUGSoutput$sims.list$beta ~ 1:length(out.time.cold$BUGSoutput$sims.list$beta), type = "l", xlab = "Length", ylab = "beta", main = "Time Cold")
+
+grid.arrange(b.a, b.b, b.c, b.d, b.e, b.f, b.g, b.h, ncol = 2)
+```
+
+Rhat values:
+
+```{r}
+
+list.rhat <- list(
+  nestage_wet = which(out.nestage.wet$BUGSoutput$summary[,8] > 1.1),
+  nestage_dry = which(out.nestage.dry$BUGSoutput$summary[,8] > 1.1),
+  time_wet = which(out.time.wet$BUGSoutput$summary[,8] > 1.1),
+  time_dry = which(out.time.dry$BUGSoutput$summary[,8] > 1.1),
+  nestage_warm = which(out.nestage.warm$BUGSoutput$summary[,8] > 1.1),
+  nestage_cold = which(out.nestage.cold$BUGSoutput$summary[,8] > 1.1),
+  time_warm = which(out.time.warm$BUGSoutput$summary[,8] > 1.1),
+  time_cold = which(out.time.cold$BUGSoutput$summary[,8] > 1.1)
+)
+
+list.rhat
+
+```

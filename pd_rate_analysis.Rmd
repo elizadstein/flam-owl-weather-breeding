@@ -1,0 +1,538 @@
+---
+title: "Flammulated Owl Nest Provisioning Analysis"
+output:
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+## Libraries
+```{r}
+library(mcp)
+Sys.setenv(JAGS_HOME="C:/Program Files/JAGS/JAGS-4.3.0")
+library(R2jags)
+library(tidyverse)
+```
+
+
+## Load Data
+```{r}
+pd <- read.csv("pd_rate_data.csv")
+
+
+# Create two data sets, one for wet years (>= 286.6605 mm) and one for dry years (<286.6605 mm)
+pd.wet <- pd %>%
+  filter(wet_dry == "Wet") 
+
+pd.dry <- pd %>%
+  filter(wet_dry == "Dry")
+
+
+# Create two data sets, one for warm years (>= 5.5725 C) and one for cold years (< 5.5725)
+pd.warm.year <- pd %>%
+  filter(warm_cold == "Warm") 
+
+pd.cold.year <- pd %>%
+  filter(warm_cold == "Cold")
+
+```
+
+
+# PD vs. Precipitation
+
+## Put into MCP models
+
+PD count vs. nest age:
+
+```{r eval=FALSE, include=FALSE}
+
+### Precip vs. Nest age ###
+
+m.nestage = list(
+  pd_count ~ 0 + nest_age,    # slope of seg_1
+  ~ 0 + nest_age     # slope of seg_2
+)
+
+# Run model for wet years
+m.nestage.wet = mcp(m.nestage, data = pd.wet, 
+              family = poisson(link = "log"), #Poisson
+              iter = 20000, adapt = 4000)     #20,000 iter, 4,000 burn-in
+
+# Run model for dry years
+m.nestage.dry = mcp(m.nestage, data = pd.dry, 
+              family = poisson(link = "log"), #Poisson
+              iter = 20000, adapt = 4000)                             #20,000 iter, 4,000 burn-in
+
+
+
+
+### Precip vs. Time of night ###
+
+m.time = list(
+  pd_count ~ 0 + time,    # slope of seg_1
+  ~ 0 + time     # slope of seg_2
+)
+
+# Run model for wet years
+m.time.wet = mcp(m.time, data = pd.wet, 
+              family = poisson(link = "log"),  #Poisson
+              iter = 20000, adapt = 4000)      #20,000 iter, 4,000 burn-in
+
+# Run model for dry years
+m.time.dry = mcp(m.time, data = pd.dry, 
+              family = poisson(link = "log"),  #Poisson
+              iter = 20000, adapt = 4000)      #20,000 iter, 4,000 burn-in
+
+
+
+### Temp vs. Nest age ###
+
+m.nestage.temp = list(
+  pd_count ~ 0 + nest_age,    # slope of seg_1
+  ~ 0 + nest_age     # slope of seg_2
+)
+
+# Run model for warm years
+m.nestage.warm = mcp(m.nestage.temp, data = pd.warm.year, 
+              family = poisson(link = "log"), #Poisson
+              iter = 20000, adapt = 4000)     #20,000 iter, 4,000 burn-in
+
+# Run model for cold years
+m.nestage.cold = mcp(m.nestage.temp, data = pd.cold.year, 
+              family = poisson(link = "log"), #Poisson
+              iter = 40000, adapt = 6000)     #20,000 iter, 4,000 burn-in
+
+
+### Temp vs. Time of night ###
+
+m.time.temp = list(
+  pd_count ~ 0 + time,    # slope of seg_1
+  ~ 0 + time     # slope of seg_2
+)
+
+# Run model for warm years
+m.time.warm = mcp(m.time.temp, data = pd.warm.year, 
+              family = poisson(link = "log"),  #Poisson
+              iter = 20000, adapt = 4000)      #20,000 iter, 4,000 burn-in
+
+# Run model for cold years
+m.time.cold = mcp(m.time.temp, data = pd.cold.year, 
+              family = poisson(link = "log"),  #Poisson
+              iter = 20000, adapt = 4000)      #20,000 iter, 4,000 burn-in
+
+
+
+
+# Print summary
+print(m.nestage.wet)
+print(m.nestage.dry)
+print(m.time.wet)
+print(m.time.dry)
+print(m.nestage.warm)
+print(m.nestage.cold)
+print(m.time.warm)
+print(m.time.cold)
+
+
+```
+
+## Extract Fitted Values
+```{r eval=FALSE, include=FALSE}
+
+# Precip vs. Nest Age
+f.nestage.wet <- fitted(m.nestage.wet) # get fitted values
+f.nestage.wet$wet_dry <- "Wet"
+
+f.nestage.dry <- fitted(m.nestage.dry) # get fitted values
+f.nestage.dry$wet_dry <- "Dry"
+
+f.nestage <- rbind(f.nestage.wet, f.nestage.dry) # Merge into one df
+
+# Precip vs. Time
+
+f.time.wet <- fitted(m.time.wet) # get fitted values
+f.time.wet$wet_dry <- "Wet"
+
+f.time.dry <- fitted(m.time.dry)
+f.time.dry$wet_dry <- "Dry"
+
+f.time <- rbind(f.time.wet, f.time.dry) # Merge into one df
+
+
+
+# Temp vs. Nest Age
+f.nestage.warm <- fitted(m.nestage.warm) # get fitted values
+f.nestage.warm$warm_cold <- "Warm"
+
+f.nestage.cold <- fitted(m.nestage.cold) # get fitted values
+f.nestage.cold$warm_cold <- "Cold"
+
+f.nestage.temp <- rbind(f.nestage.warm, f.nestage.cold) # Merge into one df
+
+# Temp vs. Time
+f.time.warm <- fitted(m.time.warm) # get fitted values
+f.time.warm$warm_cold <- "Warm"
+
+f.time.cold <- fitted(m.time.cold)
+f.time.cold$warm_cold <- "Cold"
+
+f.time.temp <- rbind(f.time.warm, f.time.cold) # Merge into one df
+
+```
+
+
+
+## Evaluate Overlap
+
+### Precipitation
+
+Extract posteriors for nest age:
+
+```{r}
+# extract 3 chains from m.nestage.wet
+chain.1.nestage.wet <- as.data.frame(m.nestage.wet$mcmc_post[[1]])
+chain.1.nestage.wet$chain <- as.factor(1)
+names(chain.1.nestage.wet) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.nestage.wet <- as.data.frame(m.nestage.wet$mcmc_post[[2]])
+chain.2.nestage.wet$chain <- as.factor(2)
+names(chain.2.nestage.wet) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.nestage.wet <- as.data.frame(m.nestage.wet$mcmc_post[[3]])
+chain.3.nestage.wet$chain <- as.factor(3)
+names(chain.3.nestage.wet) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one wet dataframe
+df.nestage.wet <- rbind(chain.1.nestage.wet, chain.2.nestage.wet, chain.3.nestage.wet)
+df.nestage.wet$wet_dry <- "Wet"
+
+
+# extract 3 chains from m.nestage.dry
+chain.1.nestage.dry <- as.data.frame(m.nestage.dry$mcmc_post[[1]])
+chain.1.nestage.dry$chain <- as.factor(1)
+names(chain.1.nestage.dry) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.nestage.dry <- as.data.frame(m.nestage.dry$mcmc_post[[2]])
+chain.2.nestage.dry$chain <- as.factor(2)
+names(chain.2.nestage.dry) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.nestage.dry <- as.data.frame(m.nestage.dry$mcmc_post[[3]])
+chain.3.nestage.dry$chain <- as.factor(3)
+names(chain.3.nestage.dry) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one dry dataframe
+df.nestage.dry <- rbind(chain.1.nestage.dry, chain.2.nestage.dry, chain.3.nestage.dry)
+df.nestage.dry$wet_dry <- "Dry"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.nestage <- rbind(df.nestage.wet, df.nestage.dry)
+names(posteriors.nestage) <- c("Changepoint", "Segment_1", "Segment_2", "Chain", "Wet_Dry")
+
+```
+
+
+Extract posteriors for time:
+
+```{r}
+# extract 3 chains from m.time.wet
+chain.1.time.wet <- as.data.frame(m.time.wet$mcmc_post[[1]])
+chain.1.time.wet$chain <- as.factor(1)
+names(chain.1.time.wet) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.time.wet <- as.data.frame(m.time.wet$mcmc_post[[2]])
+chain.2.time.wet$chain <- as.factor(2)
+names(chain.2.time.wet) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.time.wet <- as.data.frame(m.time.wet$mcmc_post[[3]])
+chain.3.time.wet$chain <- as.factor(3)
+names(chain.3.time.wet) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one wet dataframe
+df.time.wet <- rbind(chain.1.time.wet, chain.2.time.wet, chain.3.time.wet)
+df.time.wet$wet_dry <- "Wet"
+
+
+# extract 3 chains from m.time.dry
+chain.1.time.dry <- as.data.frame(m.time.dry$mcmc_post[[1]])
+chain.1.time.dry$chain <- as.factor(1)
+names(chain.1.time.dry) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.time.dry <- as.data.frame(m.time.dry$mcmc_post[[2]])
+chain.2.time.dry$chain <- as.factor(2)
+names(chain.2.time.dry) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.time.dry <- as.data.frame(m.time.dry$mcmc_post[[3]])
+chain.3.time.dry$chain <- as.factor(3)
+names(chain.3.time.dry) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one dry dataframe
+df.time.dry <- rbind(chain.1.time.dry, chain.2.time.dry, chain.3.time.dry)
+df.time.dry$wet_dry <- "Dry"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.time <- rbind(df.time.wet, df.time.dry)
+names(posteriors.time) <- c("Changepoint", "Segment_1", "Segment_2", "Chain", "Wet_Dry")
+
+# gathered
+posteriors.time.long <- gather(posteriors.time, key = "Segment", value = "Value", -Wet_Dry)
+  
+```
+
+Create df with slope_1, slope_2, and cp quantiles:
+```{r}
+
+## Custom function to get quantiles (prob) from a given vector (vec):
+getQuant <- function(vec, prob){
+  quantile(vec, probs = prob, names = FALSE)
+  }
+
+### Apply getQuant for 80% and 95% and output data.frame
+
+## Nest Age
+df.quant.nestage <- cbind(t(data.frame(
+  lower_80 = apply(X = df.nestage.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.nestage.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.nestage.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.nestage.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("wet_cp", "wet_seg1", "wet_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.nestage.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.nestage.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.nestage.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.nestage.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("dry_cp", "dry_seg1", "dry_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.nestage <- df.quant.nestage[, c("wet_cp", "dry_cp", "wet_seg1", "dry_seg1", "wet_seg2", "dry_seg2")]
+
+## Time
+df.quant.time <- cbind(t(data.frame(
+  lower_80 = apply(X = df.time.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.time.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.time.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.time.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("wet_cp", "wet_seg1", "wet_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.time.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.time.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.time.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.time.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("dry_cp", "dry_seg1", "dry_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.time <- df.quant.time[, c("wet_cp", "dry_cp", "wet_seg1", "dry_seg1", "wet_seg2", "dry_seg2")]
+
+```
+
+
+Is there a correlation between temperature and precipitation?
+```{r}
+
+cor.test(pd$annual_precip, pd$annual_min_temp, use = "complete.obs")
+
+```
+
+### Temperature
+
+Extract posteriors for nest age:
+
+```{r}
+# extract 3 chains from m.nestage.wet
+chain.1.nestage.warm <- as.data.frame(m.nestage.warm$mcmc_post[[1]])
+chain.1.nestage.warm$chain <- as.factor(1)
+names(chain.1.nestage.warm) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.nestage.warm <- as.data.frame(m.nestage.warm$mcmc_post[[2]])
+chain.2.nestage.warm$chain <- as.factor(2)
+names(chain.2.nestage.warm) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.nestage.warm <- as.data.frame(m.nestage.warm$mcmc_post[[3]])
+chain.3.nestage.warm$chain <- as.factor(3)
+names(chain.3.nestage.warm) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one wet dataframe
+df.nestage.warm <- rbind(chain.1.nestage.warm, chain.2.nestage.warm, chain.3.nestage.warm)
+df.nestage.warm$warm_cold <- "Warm"
+
+
+# extract 3 chains from m.nestage.dry
+chain.1.nestage.cold <- as.data.frame(m.nestage.cold$mcmc_post[[1]])
+chain.1.nestage.cold$chain <- as.factor(1)
+names(chain.1.nestage.cold) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.nestage.cold <- as.data.frame(m.nestage.cold$mcmc_post[[2]])
+chain.2.nestage.cold$chain <- as.factor(2)
+names(chain.2.nestage.cold) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.nestage.cold <- as.data.frame(m.nestage.cold$mcmc_post[[3]])
+chain.3.nestage.cold$chain <- as.factor(3)
+names(chain.3.nestage.cold) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one dry dataframe
+df.nestage.cold <- rbind(chain.1.nestage.cold, chain.2.nestage.cold, chain.3.nestage.cold)
+df.nestage.cold$warm_cold <- "Cold"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.nestage.temp <- rbind(df.nestage.warm, df.nestage.cold)
+names(posteriors.nestage.temp) <- c("Changepoint", "Segment_1", "Segment_2", "Chain", "Warm_Cold")
+  
+
+```
+
+Extract posteriors for time:
+
+```{r}
+# extract 3 chains from m.time.wet
+chain.1.time.warm <- as.data.frame(m.time.warm$mcmc_post[[1]])
+chain.1.time.warm$chain <- as.factor(1)
+names(chain.1.time.warm) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.time.warm <- as.data.frame(m.time.warm$mcmc_post[[2]])
+chain.2.time.warm$chain <- as.factor(2)
+names(chain.2.time.warm) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.time.warm <- as.data.frame(m.time.warm$mcmc_post[[3]])
+chain.3.time.warm$chain <- as.factor(3)
+names(chain.3.time.warm) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one wet dataframe
+df.time.warm <- rbind(chain.1.time.warm, chain.2.time.warm, chain.3.time.warm)
+df.time.warm$warm_cold <- "Warm"
+
+
+# extract 3 chains from m.time.dry
+chain.1.time.cold <- as.data.frame(m.time.cold$mcmc_post[[1]])
+chain.1.time.cold$chain <- as.factor(1)
+names(chain.1.time.cold) <- c("cp", "seg1", "seg2", "chain")
+
+chain.2.time.cold <- as.data.frame(m.time.cold$mcmc_post[[2]])
+chain.2.time.cold$chain <- as.factor(2)
+names(chain.2.time.cold) <- c("cp", "seg1", "seg2", "chain")
+
+chain.3.time.cold <- as.data.frame(m.time.cold$mcmc_post[[3]])
+chain.3.time.cold$chain <- as.factor(3)
+names(chain.3.time.cold) <- c("cp", "seg1", "seg2", "chain")
+
+# combine into one dry dataframe
+df.time.cold <- rbind(chain.1.time.cold, chain.2.time.cold, chain.3.time.cold)
+df.time.cold$warm_cold <- "Cold"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.time.temp <- rbind(df.time.warm, df.time.cold)
+names(posteriors.time.temp) <- c("Changepoint", "Segment_1", "Segment_2", "Chain", "Warm_Cold")
+  
+
+```
+
+
+Create df with slope_1, slope_2, and cp quantiles:
+```{r}
+
+## Custom function to get quantiles (prob) from a given vector (vec):
+getQuant <- function(vec, prob){
+  quantile(vec, probs = prob, names = FALSE)
+  }
+
+### Apply getQuant for 80%, and 95% and output data.frame
+
+## Nest Age
+df.quant.nestage.temp <- cbind(t(data.frame(
+  lower_80 = apply(X = df.nestage.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.nestage.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.nestage.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.nestage.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("warm_cp", "warm_seg1", "warm_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.nestage.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.nestage.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.nestage.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.nestage.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("cold_cp", "cold_seg1", "cold_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.nestage.temp <- df.quant.nestage.temp[, c("warm_cp", "cold_cp", "warm_seg1", "cold_seg1", "warm_seg2", "cold_seg2")]
+
+## Time
+df.quant.time.temp <- cbind(t(data.frame(
+  lower_80 = apply(X = df.time.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.time.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.time.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.time.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("warm_cp", "warm_seg1", "warm_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.time.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.time.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.time.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.time.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("cold_cp", "cold_seg1", "cold_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.time.temp <- df.quant.time.temp[, c("warm_cp", "cold_cp", "warm_seg1", "cold_seg1", "warm_seg2", "cold_seg2")]
+
+
+```
+
+
+
+## Print max/min/averages:
+
+```{r}
+
+mmm_nestage_precip <- data.frame(
+value = c("Estimate", "Q2.5", "Q97.5"),
+mean_nestage_wet = c(mean(f.nestage$fitted[f.nestage$wet_dry == "Wet"]), mean(f.nestage$Q2.5[f.nestage$wet_dry == "Wet"]), mean(f.nestage$Q97.5[f.nestage$wet_dry == "Wet"])),
+mean_nestage_dry = c(mean(f.nestage$fitted[f.nestage$wet_dry == "Dry"]), mean(f.nestage$Q2.5[f.nestage$wet_dry == "Dry"]), mean(f.nestage$Q97.5[f.nestage$wet_dry == "Dry"])),
+max_nestage_wet = c(max(f.nestage$fitted[f.nestage$wet_dry == "Wet"]), max(f.nestage$Q2.5[f.nestage$wet_dry == "Wet"]), max(f.nestage$Q97.5[f.nestage$wet_dry == "Wet"])),
+max_nestage_dry = c(max(f.nestage$fitted[f.nestage$wet_dry == "Dry"]), max(f.nestage$Q2.5[f.nestage$wet_dry == "Dry"]), max(f.nestage$Q97.5[f.nestage$wet_dry == "Dry"])),
+min_nestage_wet = c(min(f.nestage$fitted[f.nestage$wet_dry == "Wet"]), min(f.nestage$Q2.5[f.nestage$wet_dry == "Wet"]), min(f.nestage$Q97.5[f.nestage$wet_dry == "Wet"])),
+min_nestage_dry = c(min(f.nestage$fitted[f.nestage$wet_dry == "Dry"]), min(f.nestage$Q2.5[f.nestage$wet_dry == "Dry"]), min(f.nestage$Q97.5[f.nestage$wet_dry == "Dry"]))
+)
+
+mmm_time_precip <- data.frame(
+value = c("Estimate", "Q2.5", "Q97.5"),
+mean_time_wet = c(mean(f.time$fitted[f.time$wet_dry == "Wet"]), mean(f.time$Q2.5[f.time$wet_dry == "Wet"]), mean(f.time$Q97.5[f.time$wet_dry == "Wet"])),
+mean_time_dry = c(mean(f.time$fitted[f.time$wet_dry == "Dry"]), mean(f.time$Q2.5[f.time$wet_dry == "Dry"]), mean(f.time$Q97.5[f.time$wet_dry == "Dry"])),
+max_time_wet = c(max(f.time$fitted[f.time$wet_dry == "Wet"]), max(f.time$Q2.5[f.time$wet_dry == "Wet"]), max(f.time$Q97.5[f.time$wet_dry == "Wet"])),
+max_time_dry = c(max(f.time$fitted[f.time$wet_dry == "Dry"]), max(f.time$Q2.5[f.time$wet_dry == "Dry"]), max(f.time$Q97.5[f.time$wet_dry == "Dry"])),
+min_time_wet = c(min(f.time$fitted[f.time$wet_dry == "Wet"]), min(f.time$Q2.5[f.time$wet_dry == "Wet"]), min(f.time$Q97.5[f.time$wet_dry == "Wet"])),
+min_time_dry = c(min(f.time$fitted[f.time$wet_dry == "Dry"]), min(f.time$Q2.5[f.time$wet_dry == "Dry"]), min(f.time$Q97.5[f.time$wet_dry == "Dry"]))
+)
+
+mmm_nestage_temp <- data.frame(
+value = c("Estimate", "Q2.5", "Q97.5"),
+mean_nestage_warm = c(mean(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Warm"]), mean(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Warm"]), mean(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Warm"])),
+mean_nestage_cold = c(mean(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Cold"]), mean(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Cold"]), mean(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Cold"])),
+max_nestage_warm = c(max(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Warm"]), max(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Warm"]), max(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Warm"])),
+max_nestage_cold = c(max(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Cold"]), max(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Cold"]), max(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Cold"])),
+min_nestage_warm = c(min(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Warm"]), min(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Warm"]), min(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Warm"])),
+min_nestage_cold = c(min(f.nestage.temp$fitted[f.nestage.temp$warm_cold == "Cold"]), min(f.nestage.temp$Q2.5[f.nestage.temp$warm_cold == "Cold"]), min(f.nestage.temp$Q97.5[f.nestage.temp$warm_cold == "Cold"]))
+)
+
+mmm_time_temp <- data.frame(
+value = c("Estimate", "Q2.5", "Q97.5"),
+mean_time_warm = c(mean(f.time.temp$fitted[f.time.temp$warm_cold == "Warm"]), mean(f.time.temp$Q2.5[f.time.temp$warm_cold == "Warm"]), mean(f.time.temp$Q97.5[f.time.temp$warm_cold == "Warm"])),
+mean_time_cold = c(mean(f.time.temp$fitted[f.time.temp$warm_cold == "Cold"]), mean(f.time.temp$Q2.5[f.time.temp$warm_cold == "Cold"]), mean(f.time.temp$Q97.5[f.time.temp$warm_cold == "Cold"])),
+max_time_warm = c(max(f.time.temp$fitted[f.time.temp$warm_cold == "Warm"]), max(f.time.temp$Q2.5[f.time.temp$warm_cold == "Warm"]), max(f.time.temp$Q97.5[f.time.temp$warm_cold == "Warm"])),
+max_time_cold = c(max(f.time.temp$fitted[f.time.temp$warm_cold == "Cold"]), max(f.time.temp$Q2.5[f.time.temp$warm_cold == "Cold"]), max(f.time.temp$Q97.5[f.time.temp$warm_cold == "Cold"])),
+min_time_warm = c(min(f.time.temp$fitted[f.time.temp$warm_cold == "Warm"]), min(f.time.temp$Q2.5[f.time.temp$warm_cold == "Warm"]), min(f.time.temp$Q97.5[f.time.temp$warm_cold == "Warm"])),
+min_time_cold = c(min(f.time.temp$fitted[f.time.temp$warm_cold == "Cold"]), min(f.time.temp$Q2.5[f.time.temp$warm_cold == "Cold"]), min(f.time.temp$Q97.5[f.time.temp$warm_cold == "Cold"]))
+)
+
+
+mmm_nestage_all <- t(cbind(mmm_nestage_precip, mmm_nestage_temp))
+mmm_time_all <- t(cbind(mmm_time_precip, mmm_time_temp))
+mmm_all <- as.data.frame(rbind(mmm_nestage_all, mmm_time_all))
+
+
+mmm_all$value <- rownames(mmm_all)
+rownames(mmm_all) <- NULL
+colnames(mmm_all) <- c("Estimate", "Q2.5", "Q97.5", "value")
+
+max_min_mean <- rbind(mmm_all[2:7,], mmm_all[9:14,], mmm_all[16:21,], mmm_all[23:28,])
+
+max_min_mean <- max_min_mean %>%
+  separate(value, sep = "_", into = c("mmm", "nestage_time", "climate")) %>%
+  select(nestage_time, mmm, climate, Estimate, Q2.5, Q97.5)
+
+```
+

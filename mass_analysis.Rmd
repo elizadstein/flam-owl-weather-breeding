@@ -1,0 +1,1339 @@
+---
+title: "mass_analysis"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load Packages
+
+```{r}
+library(R2jags)
+library(tidyverse)
+library(lubridate)
+library(mcp)
+library(tidybayes)
+
+```
+
+
+# Read in data
+
+
+```{r}
+
+mass_climate <- read.csv("mass_data.csv")
+
+
+# Split into all adult (a), adult male (m), adult female (f), and nestling (n)
+mass_climate_a <- filter(mass_climate, age == "AD" | age == "U")
+mass_climate_m <- filter(mass_climate, age == "AD" & sex == "M")
+mass_climate_f <- filter(mass_climate, age == "AD" & sex == "F")
+mass_climate_n <- filter(mass_climate, age == "N" | age == "F")
+
+
+# Keep only individuals with multiple measurements
+
+duplicated_m <- mass_climate_m %>%
+  group_by(band) %>%
+  filter(n()>1)
+
+duplicated_f <- mass_climate_f %>%
+  group_by(band) %>%
+  filter(n()>1)
+
+```
+
+
+
+# Adult Mass Throughout Season
+
+
+Separate into wet/dry and warm/cold
+```{r}
+
+female.wet <- mass_climate_f %>%
+  filter(wet_dry == "Wet")
+
+female.dry <- mass_climate_f %>%
+  filter(wet_dry == "Dry")
+
+female.warm <- mass_climate_f %>%
+  filter(warm_cold == "Warm")
+
+female.cold <- mass_climate_f %>%
+  filter(warm_cold == "Cold")
+
+male.wet <- mass_climate_m %>%
+  filter(wet_dry == "Wet")
+
+male.dry <- mass_climate_m %>%
+  filter(wet_dry == "Dry")
+
+male.warm <- mass_climate_m %>%
+  filter(warm_cold == "Warm")
+
+male.cold <- mass_climate_m %>%
+  filter(warm_cold == "Cold")
+
+```
+
+
+## Define linear mixed model
+
+```{r}
+
+# Write model
+
+sink("glmm.txt")
+cat("
+model {
+
+# Priors
+for (i in 1:n.groups){
+alpha[i] ~ dnorm(mu.int, tau.int)
+beta[i] ~ dnorm(mu.beta, tau.beta)
+sigma[i] ~ dunif(mu.sigma, tau.sigma)
+}
+
+mu.int ~ dnorm(0, 0.001)		# Hyperparam for random intercepts
+tau.int <- 1 / (sigma.int * sigma.int)
+sigma.int ~ dunif(0, 10)
+
+mu.beta ~ dnorm(0, 0.001)		# Hyperparam for random slopes
+tau.beta <- 1 / (sigma.beta * sigma.beta)
+sigma.beta ~ dunif(0, 10)
+
+mu.sigma ~ dnorm(0, 0.001)		# Hyperparam for sigma
+tau.sigma <- 1 / (sigma.sigma * sigma.sigma)
+sigma.sigma ~ dunif(0, 10)
+
+# Likelihood
+for (i in 1:n) {
+y[i] ~ dnorm(mu[i], tau.sigma)
+mu[i] <- alpha[band[i]] + beta[band[i]]*x[i]
+}
+
+}
+", fill = TRUE)
+sink()
+```
+
+
+## Wet vs. Dry Years
+
+```{r eval=FALSE, include=FALSE}
+
+## Wet Years: Female
+n.groups <- as.numeric(length(unique(female.wet$band)))
+# Bundle data
+win.data <- list(
+  y = female.wet$mass,
+  x = female.wet$jday,
+  n = nrow(female.wet),
+  band = as.numeric(as.factor(female.wet$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.female.wet <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## Dry Years: Female
+n.groups <- as.numeric(length(unique(female.dry$band)))
+# Bundle data
+win.data <- list(
+  y = female.dry$mass,
+  x = female.dry$jday,
+  n = nrow(female.dry),
+  band = as.numeric(as.factor(female.dry$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.female.dry <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## Wet Years: Male 
+n.groups <- as.numeric(length(unique(male.wet$band)))
+# Bundle data
+win.data <- list(
+  y = male.wet$mass,
+  x = male.wet$jday,
+  n = nrow(male.wet),
+  band = as.numeric(as.factor(male.wet$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.male.wet <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## Dry Years: Male
+n.groups <- as.numeric(length(unique(male.dry$band)))
+# Bundle data
+win.data <- list(
+  y = male.dry$mass,
+  x = male.dry$jday,
+  n = nrow(male.dry),
+  band = as.numeric(as.factor(male.dry$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.male.dry <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+
+
+```
+
+## Warm vs. Cold Years
+
+```{r eval=FALSE, include=FALSE}
+
+## Warm Years: Female
+n.groups <- as.numeric(length(unique(female.warm$band)))
+# Bundle data
+win.data <- list(
+  y = female.warm$mass,
+  x = female.warm$jday,
+  n = nrow(female.warm),
+  band = as.numeric(as.factor(female.warm$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.female.warm <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## cold Years: Female
+n.groups <- as.numeric(length(unique(female.cold$band)))
+# Bundle data
+win.data <- list(
+  y = female.cold$mass,
+  x = female.cold$jday,
+  n = nrow(female.cold),
+  band = as.numeric(as.factor(female.cold$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.female.cold <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## warm Years: Male 
+n.groups <- as.numeric(length(unique(male.warm$band)))
+# Bundle data
+win.data <- list(
+  y = male.warm$mass,
+  x = male.warm$jday,
+  n = nrow(male.warm),
+  band = as.numeric(as.factor(male.warm$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.male.warm <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+## cold Years: Male
+n.groups <- as.numeric(length(unique(male.cold$band)))
+# Bundle data
+win.data <- list(
+  y = male.cold$mass,
+  x = male.cold$jday,
+  n = nrow(male.cold),
+  band = as.numeric(as.factor(male.cold$band)),
+  n.groups = n.groups)
+
+
+# Inits function
+inits <- function(){ list(alpha = rnorm(n.groups, 0, 2), beta = rnorm(n.groups, 1, 1),  sigma = rnorm(n.groups, 1, 1))}
+
+# Parameters to estimate
+params <- c("alpha", "beta", "mu.int", "sigma.int", "mu.beta", "sigma.beta")
+
+# MCMC settings
+nc = 3 ; ni = 200000 ; nb = 50000 ; nt = 1
+
+# Start Gibbs sampler
+out.male.cold <- jags(data = win.data, inits = inits, parameters = params, model =
+"glmm.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+
+
+
+```
+
+## Extract Posteriors
+```{r}
+
+## Female Wet
+
+# Extract estimates
+
+alpha.post.female.wet <- as.vector(out.female.wet$BUGSoutput$sims.list$mu.int)
+beta.post.female.wet <- as.vector(out.female.wet$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.female.wet <- c(alpha.post.female.wet, beta.post.female.wet + alpha.post.female.wet)
+
+
+## Female Dry
+
+# Extract estimates
+
+alpha.post.female.dry <- as.vector(out.female.dry$BUGSoutput$sims.list$mu.int)
+beta.post.female.dry <- as.vector(out.female.dry$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.female.dry <- c(alpha.post.female.dry, beta.post.female.dry + alpha.post.female.dry)
+
+## Combine wet and dry posteriors
+
+posteriors.female.precip <- data.frame(
+  alpha = c(alpha.post.female.wet, alpha.post.female.dry),
+  beta = c(beta.post.female.wet, beta.post.female.dry),
+  wet_dry = c(rep("Wet", length = length(alpha.post.female.wet)),
+              rep("Dry", length = length(alpha.post.female.dry)))
+)
+
+
+## Male Wet
+
+# Extract estimates
+
+alpha.post.male.wet <- as.vector(out.male.wet$BUGSoutput$sims.list$mu.int)
+beta.post.male.wet <- as.vector(out.male.wet$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.male.wet <- c(alpha.post.male.wet, beta.post.male.wet + alpha.post.male.wet)
+
+
+## Male Dry
+
+# Extract estimates
+
+alpha.post.male.dry <- as.vector(out.male.dry$BUGSoutput$sims.list$mu.int)
+beta.post.male.dry <- as.vector(out.male.dry$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.male.dry <- c(alpha.post.male.dry, beta.post.male.dry + alpha.post.male.dry)
+
+## Combine wet and dry posteriors
+
+posteriors.male.precip <- data.frame(
+  alpha = c(alpha.post.male.wet, alpha.post.male.dry),
+  beta = c(beta.post.male.wet, beta.post.male.dry),
+  wet_dry = c(rep("Wet", length = length(alpha.post.male.wet)),
+              rep("Dry", length = length(alpha.post.male.dry)))
+)
+
+
+
+## Female Warm
+
+# Extract estimates
+
+alpha.post.female.warm <- as.vector(out.female.warm$BUGSoutput$sims.list$mu.int)
+beta.post.female.warm <- as.vector(out.female.warm$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.female.warm <- c(alpha.post.female.warm, beta.post.female.warm + alpha.post.female.warm)
+
+
+## Female Cold
+
+# Extract estimates
+
+alpha.post.female.cold <- as.vector(out.female.cold$BUGSoutput$sims.list$mu.int)
+beta.post.female.cold <- as.vector(out.female.cold$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.female.cold <- c(alpha.post.female.cold, beta.post.female.cold + alpha.post.female.cold)
+
+## Combine warm and cold posteriors
+
+posteriors.female.temp <- data.frame(
+  alpha = c(alpha.post.female.warm, alpha.post.female.cold),
+  beta = c(beta.post.female.warm, beta.post.female.cold),
+  warm_cold = c(rep("Warm", length = length(alpha.post.female.warm)),
+              rep("Cold", length = length(alpha.post.female.cold)))
+)
+
+
+## Male Warm
+
+# Extract estimates
+
+alpha.post.male.warm <- as.vector(out.male.warm$BUGSoutput$sims.list$mu.int)
+beta.post.male.warm <- as.vector(out.male.warm$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.male.warm <- c(alpha.post.male.warm, beta.post.male.warm + alpha.post.male.warm)
+
+
+## Male Cold
+
+# Extract estimates
+
+alpha.post.male.cold <- as.vector(out.male.cold$BUGSoutput$sims.list$mu.int)
+beta.post.male.cold <- as.vector(out.male.cold$BUGSoutput$sims.list$mu.beta)
+
+# create vector with posteriors
+posteriors.male.cold <- c(alpha.post.male.cold, beta.post.male.cold + alpha.post.male.cold)
+
+## Combine warm and cold posteriors
+
+posteriors.male.temp <- data.frame(
+  alpha = c(alpha.post.male.warm, alpha.post.male.cold),
+  beta = c(beta.post.male.warm, beta.post.male.cold),
+  warm_cold = c(rep("Warm", length = length(alpha.post.male.warm)),
+              rep("Cold", length = length(alpha.post.male.cold)))
+)
+```
+
+## Summarize Model Findings
+
+Create dataframe with posteriors for male and female
+
+```{r}
+posteriors.all.precip <- rbind(posteriors.male.precip, posteriors.female.precip)
+
+posteriors.all.temp <- rbind(posteriors.male.temp, posteriors.female.temp)
+
+```
+
+Create model summary table
+
+```{r}
+
+
+lm.output.female <- t(data.frame(
+  estimate = c(
+    "Mean", 
+    "SD", 
+    "Upper 97.5", 
+    "Lower 2.5"),
+  female_wet_alpha = c(
+    out.female.wet$BUGSoutput$mean$mu.int,
+    out.female.wet$BUGSoutput$sd$mu.int,
+    mean(quantile(out.female.wet$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.female.wet$BUGSoutput$sims.list$mu.int, 0.025))),
+  female_dry_alpha = c(  
+    out.female.dry$BUGSoutput$mean$mu.int,
+    out.female.dry$BUGSoutput$sd$mu.int,
+    mean(quantile(out.female.dry$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.female.dry$BUGSoutput$sims.list$mu.int, 0.025))),
+  female_wet_beta = c(
+    out.female.wet$BUGSoutput$mean$mu.beta,
+    out.female.wet$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.female.wet$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.female.wet$BUGSoutput$sims.list$mu.beta, 0.025))),
+  female_dry_beta = c(  
+    out.female.dry$BUGSoutput$mean$mu.beta,
+    out.female.dry$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.female.dry$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.female.dry$BUGSoutput$sims.list$mu.beta, 0.025))),
+  female_warm_alpha = c(
+    out.female.warm$BUGSoutput$mean$mu.int,
+    out.female.warm$BUGSoutput$sd$mu.int,
+    mean(quantile(out.female.warm$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.female.warm$BUGSoutput$sims.list$mu.int, 0.025))),
+  female_cold_alpha = c(  
+    out.female.cold$BUGSoutput$mean$mu.int,
+    out.female.cold$BUGSoutput$sd$mu.int,
+    mean(quantile(out.female.cold$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.female.cold$BUGSoutput$sims.list$mu.int, 0.025))),
+  female_warm_beta = c(
+    out.female.warm$BUGSoutput$mean$mu.beta,
+    out.female.warm$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.female.warm$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.female.warm$BUGSoutput$sims.list$mu.beta, 0.025))),
+  female_cold_beta = c(  
+    out.female.cold$BUGSoutput$mean$mu.beta,
+    out.female.cold$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.female.cold$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.female.cold$BUGSoutput$sims.list$mu.beta, 0.025)))
+))
+
+lm.output.male <- t(data.frame(
+  estimate = c(
+    "Mean", 
+    "SD", 
+    "Upper 97.5", 
+    "Lower 2.5"),
+  male_wet_alpha = c(
+    out.male.wet$BUGSoutput$mean$mu.int,
+    out.male.wet$BUGSoutput$sd$mu.int,
+    mean(quantile(out.male.wet$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.male.wet$BUGSoutput$sims.list$mu.int, 0.025))),
+  male_dry_alpha = c(  
+    out.male.dry$BUGSoutput$mean$mu.int,
+    out.male.dry$BUGSoutput$sd$mu.int,
+    mean(quantile(out.male.dry$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.male.dry$BUGSoutput$sims.list$mu.int, 0.025))),
+  male_wet_beta = c(
+    out.male.wet$BUGSoutput$mean$mu.beta,
+    out.male.wet$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.male.wet$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.male.wet$BUGSoutput$sims.list$mu.beta, 0.025))),
+  male_dry_beta = c(  
+    out.male.dry$BUGSoutput$mean$mu.beta,
+    out.male.dry$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.male.dry$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.male.dry$BUGSoutput$sims.list$mu.beta, 0.025))),
+  male_warm_alpha = c(
+    out.male.warm$BUGSoutput$mean$mu.int,
+    out.male.warm$BUGSoutput$sd$mu.int,
+    mean(quantile(out.male.warm$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.male.warm$BUGSoutput$sims.list$mu.int, 0.025))),
+  male_cold_alpha = c(  
+    out.male.cold$BUGSoutput$mean$mu.int,
+    out.male.cold$BUGSoutput$sd$mu.int,
+    mean(quantile(out.male.cold$BUGSoutput$sims.list$mu.int, 0.975)),
+    mean(quantile(out.male.cold$BUGSoutput$sims.list$mu.int, 0.025))),
+  male_warm_beta = c(
+    out.male.warm$BUGSoutput$mean$mu.beta,
+    out.male.warm$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.male.warm$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.male.warm$BUGSoutput$sims.list$mu.beta, 0.025))),
+  male_cold_beta = c(  
+    out.male.cold$BUGSoutput$mean$mu.beta,
+    out.male.cold$BUGSoutput$sd$mu.beta,
+    mean(quantile(out.male.cold$BUGSoutput$sims.list$mu.beta, 0.975)),
+    mean(quantile(out.male.cold$BUGSoutput$sims.list$mu.beta, 0.025)))
+))
+
+# combine dfs
+lm.output.all <- rbind(lm.output.female[1:9,], lm.output.male[2:9,])
+
+
+```
+
+
+## Evaluating Model Fit
+
+Trace plots (mu.int):
+
+```{r}
+windows()
+
+a.a <- lattice::xyplot(out.female.wet$BUGSoutput$sims.list$mu.int ~ 1:length(out.female.wet$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "female Wet")
+
+
+a.b <- lattice::xyplot(out.female.dry$BUGSoutput$sims.list$mu.int ~ 1:length(out.female.dry$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "female Dry")
+
+
+a.c <- lattice::xyplot(out.male.wet$BUGSoutput$sims.list$mu.int ~ 1:length(out.male.wet$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "male Wet")
+
+
+a.d <- lattice::xyplot(out.male.dry$BUGSoutput$sims.list$mu.int ~ 1:length(out.male.dry$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "male Dry")
+
+
+a.e <- lattice::xyplot(out.female.warm$BUGSoutput$sims.list$mu.int ~ 1:length(out.female.warm$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "female Warm")
+
+
+a.f <- lattice::xyplot(out.female.cold$BUGSoutput$sims.list$mu.int ~ 1:length(out.female.cold$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "female Cold")
+
+
+a.g <- lattice::xyplot(out.male.warm$BUGSoutput$sims.list$mu.int ~ 1:length(out.male.warm$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "male Warm")
+
+
+a.h <- lattice::xyplot(out.male.cold$BUGSoutput$sims.list$mu.int ~ 1:length(out.male.cold$BUGSoutput$sims.list$mu.int), type = "l", xlab = "Length", ylab = "Alpha", main = "male Cold")
+
+grid.arrange(a.a, a.b, a.c, a.d, a.e, a.f, a.g, a.h, ncol = 2)
+```
+
+Trace plots (mu.beta):
+
+```{r}
+windows()
+
+b.a <- lattice::xyplot(out.female.wet$BUGSoutput$sims.list$mu.beta ~ 1:length(out.female.wet$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "female Wet")
+
+
+b.b <- lattice::xyplot(out.female.dry$BUGSoutput$sims.list$mu.beta ~ 1:length(out.female.dry$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "female Dry")
+
+
+b.c <- lattice::xyplot(out.male.wet$BUGSoutput$sims.list$mu.beta ~ 1:length(out.male.wet$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "male Wet")
+
+
+b.d <- lattice::xyplot(out.male.dry$BUGSoutput$sims.list$mu.beta ~ 1:length(out.male.dry$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "male Dry")
+
+
+b.e <- lattice::xyplot(out.female.warm$BUGSoutput$sims.list$mu.beta ~ 1:length(out.female.warm$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "female Warm")
+
+
+b.f <- lattice::xyplot(out.female.cold$BUGSoutput$sims.list$mu.beta ~ 1:length(out.female.cold$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "female Cold")
+
+
+b.g <- lattice::xyplot(out.male.warm$BUGSoutput$sims.list$mu.beta ~ 1:length(out.male.warm$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "male Warm")
+
+
+b.h <- lattice::xyplot(out.male.cold$BUGSoutput$sims.list$mu.beta ~ 1:length(out.male.cold$BUGSoutput$sims.list$mu.beta), type = "l", xlab = "Length", ylab = "beta", main = "male Cold")
+
+grid.arrange(b.a, b.b, b.c, b.d, b.e, b.f, b.g, b.h, ncol = 2)
+```
+
+Rhat values:
+
+```{r}
+
+list.rhat <- list(
+  female_wet = which(out.female.wet$BUGSoutput$summary[,8] > 1.1),
+  female_dry = which(out.female.dry$BUGSoutput$summary[,8] > 1.1),
+  male_wet = which(out.male.wet$BUGSoutput$summary[,8] > 1.1),
+  male_dry = which(out.male.dry$BUGSoutput$summary[,8] > 1.1),
+  female_warm = which(out.female.warm$BUGSoutput$summary[,8] > 1.1),
+  female_cold = which(out.female.cold$BUGSoutput$summary[,8] > 1.1),
+  male_warm = which(out.male.warm$BUGSoutput$summary[,8] > 1.1),
+  male_cold = which(out.male.cold$BUGSoutput$summary[,8] > 1.1)
+)
+
+list.rhat
+
+```
+
+
+
+## Extract fitted values for figures
+
+Female Precip
+```{r}
+
+### wet
+
+# Process MCMC output
+dat.female.wet <- as.data.frame(as.matrix(as.mcmc(out.female.wet)))
+
+# Simulate range of x
+x2.female.wet <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.female.wet <- matrix(rep(NA, 
+                      nrow(dat.female.wet)*length(x2.female.wet)), 
+                      nrow = nrow(dat.female.wet))
+
+# fill in matrix using formula
+for(i in 1:length(x2.female.wet)){
+  mat.female.wet[, i] <- dat.female.wet$mu.int + dat.female.wet$mu.beta * x2.female.wet[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.female.wet <- apply(mat.female.wet, 2, mean)
+lower.female.wet <- apply(mat.female.wet, 2, function(x) quantile(x, probs = c(0.025)))
+upper.female.wet <- apply(mat.female.wet, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.female.wet <- data.frame(jday = x2.female.wet, 
+                       mean = mean.female.wet, 
+                       lower = lower.female.wet, 
+                       upper = upper.female.wet,
+                       wet_dry = rep("Wet", length(x2.female.wet)))
+
+
+
+### dry
+
+# Process MCMC output
+dat.female.dry <- as.data.frame(as.matrix(as.mcmc(out.female.dry)))
+
+# Simulate range of x
+x2.female.dry <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.female.dry <- matrix(rep(NA, 
+                      nrow(dat.female.dry)*length(x2.female.dry)), 
+                      nrow = nrow(dat.female.dry))
+
+# fill in matrix using formula
+for(i in 1:length(x2.female.dry)){
+  mat.female.dry[, i] <- dat.female.dry$mu.int + dat.female.dry$mu.beta * x2.female.dry[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.female.dry <- apply(mat.female.dry, 2, mean)
+lower.female.dry <- apply(mat.female.dry, 2, function(x) quantile(x, probs = c(0.025)))
+upper.female.dry <- apply(mat.female.dry, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.female.dry <- data.frame(jday = x2.female.dry, 
+                       mean = mean.female.dry, 
+                       lower = lower.female.dry, 
+                       upper = upper.female.dry,
+                       wet_dry = rep("Dry", length(x2.female.dry)))
+
+### Combine wet and dry df
+
+plot.dat.female.precip <- data.frame(
+  rbind(plot.dat.female.wet, plot.dat.female.dry)
+)
+
+```
+
+male and Precip
+```{r}
+
+### Wet
+
+# Process MCMC output
+dat.male.wet <- as.data.frame(as.matrix(as.mcmc(out.male.wet)))
+
+# Simulate range of x
+x2.male.wet <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.male.wet <- matrix(rep(NA, 
+                      nrow(dat.male.wet)*length(x2.male.wet)), 
+                      nrow = nrow(dat.male.wet))
+
+# fill in matrix using formula
+for(i in 1:length(x2.male.wet)){
+  mat.male.wet[, i] <- dat.male.wet$mu.int + dat.male.wet$mu.beta * x2.male.wet[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.male.wet <- apply(mat.male.wet, 2, mean)
+lower.male.wet <- apply(mat.male.wet, 2, function(x) quantile(x, probs = c(0.025)))
+upper.male.wet <- apply(mat.male.wet, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.male.wet <- data.frame(jday = x2.male.wet, 
+                       mean = mean.male.wet, 
+                       lower = lower.male.wet, 
+                       upper = upper.male.wet,
+                       wet_dry = rep("Wet", length(x2.male.wet)))
+
+
+
+### dry
+
+# Process MCMC output
+dat.male.dry <- as.data.frame(as.matrix(as.mcmc(out.male.dry)))
+
+# Simulate range of x
+x2.male.dry <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.male.dry <- matrix(rep(NA, 
+                      nrow(dat.male.dry)*length(x2.male.dry)), 
+                      nrow = nrow(dat.male.dry))
+
+# fill in matrix using formula
+for(i in 1:length(x2.male.dry)){
+  mat.male.dry[, i] <- dat.male.dry$mu.int + dat.male.dry$mu.beta * x2.male.dry[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.male.dry <- apply(mat.male.dry, 2, mean)
+lower.male.dry <- apply(mat.male.dry, 2, function(x) quantile(x, probs = c(0.025)))
+upper.male.dry <- apply(mat.male.dry, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.male.dry <- data.frame(jday = x2.male.dry, 
+                       mean = mean.male.dry, 
+                       lower = lower.male.dry, 
+                       upper = upper.male.dry,
+                       wet_dry = rep("Dry", length(x2.male.dry)))
+
+### Combine wet and dry df
+
+plot.dat.male.precip <- data.frame(
+  rbind(plot.dat.male.wet, plot.dat.male.dry)
+)
+
+```
+
+Nest Age and Temp
+```{r}
+
+### Warm
+
+# Process MCMC output
+dat.female.warm <- as.data.frame(as.matrix(as.mcmc(out.female.warm)))
+
+# Simulate range of x
+x2.female.warm <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.female.warm <- matrix(rep(NA, 
+                      nrow(dat.female.warm)*length(x2.female.warm)), 
+                      nrow = nrow(dat.female.warm))
+
+# fill in matrix using formula
+for(i in 1:length(x2.female.warm)){
+  mat.female.warm[, i] <- dat.female.warm$mu.int + dat.female.warm$mu.beta * x2.female.warm[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.female.warm <- apply(mat.female.warm, 2, mean)
+lower.female.warm <- apply(mat.female.warm, 2, function(x) quantile(x, probs = c(0.025)))
+upper.female.warm <- apply(mat.female.warm, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.female.warm <- data.frame(jday = x2.female.warm, 
+                       mean = mean.female.warm, 
+                       lower = lower.female.warm, 
+                       upper = upper.female.warm,
+                       warm_cold = rep("Warm", length(x2.female.warm)))
+
+
+
+### Cold
+
+# Process MCMC output
+dat.female.cold <- as.data.frame(as.matrix(as.mcmc(out.female.cold)))
+
+# Simulate range of x
+x2.female.cold <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.female.cold <- matrix(rep(NA, 
+                      nrow(dat.female.cold)*length(x2.female.cold)), 
+                      nrow = nrow(dat.female.cold))
+
+# fill in matrix using formula
+for(i in 1:length(x2.female.cold)){
+  mat.female.cold[, i] <- dat.female.cold$mu.int + dat.female.cold$mu.beta * x2.female.cold[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.female.cold <- apply(mat.female.cold, 2, mean)
+lower.female.cold <- apply(mat.female.cold, 2, function(x) quantile(x, probs = c(0.025)))
+upper.female.cold <- apply(mat.female.cold, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.female.cold <- data.frame(jday = x2.female.cold, 
+                       mean = mean.female.cold, 
+                       lower = lower.female.cold, 
+                       upper = upper.female.cold,
+                       warm_cold = rep("Cold", length(x2.female.cold)))
+
+### Combine Warm and Cold df
+
+plot.dat.female.temp <- data.frame(
+  rbind(plot.dat.female.warm, plot.dat.female.cold)
+)
+
+```
+
+male and Temp
+```{r}
+
+### Warm
+
+# Process MCMC output
+dat.male.warm <- as.data.frame(as.matrix(as.mcmc(out.male.warm)))
+
+# Simulate range of x
+x2.male.warm <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.male.warm <- matrix(rep(NA, 
+                      nrow(dat.male.warm)*length(x2.male.warm)), 
+                      nrow = nrow(dat.male.warm))
+
+# fill in matrix using formula
+for(i in 1:length(x2.male.warm)){
+  mat.male.warm[, i] <- dat.male.warm$mu.int + dat.male.warm$mu.beta * x2.male.warm[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.male.warm <- apply(mat.male.warm, 2, mean)
+lower.male.warm <- apply(mat.male.warm, 2, function(x) quantile(x, probs = c(0.025)))
+upper.male.warm <- apply(mat.male.warm, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.male.warm <- data.frame(jday = x2.male.warm, 
+                       mean = mean.male.warm, 
+                       lower = lower.male.warm, 
+                       upper = upper.male.warm,
+                       warm_cold = rep("Warm", length(x2.male.warm)))
+
+
+
+### Cold
+
+# Process MCMC output
+dat.male.cold <- as.data.frame(as.matrix(as.mcmc(out.male.cold)))
+
+# Simulate range of x
+x2.male.cold <- seq(min(mass_climate_a$jday), max(mass_climate_a$jday), length = 50)
+
+# create empty matrix
+mat.male.cold <- matrix(rep(NA, 
+                      nrow(dat.male.cold)*length(x2.male.cold)), 
+                      nrow = nrow(dat.male.cold))
+
+# fill in matrix using formula
+for(i in 1:length(x2.male.cold)){
+  mat.male.cold[, i] <- dat.male.cold$mu.int + dat.male.cold$mu.beta * x2.male.cold[i]
+}
+
+# Variance now comes from posterior, not the vcov matrix
+mean.male.cold <- apply(mat.male.cold, 2, mean)
+lower.male.cold <- apply(mat.male.cold, 2, function(x) quantile(x, probs = c(0.025)))
+upper.male.cold <- apply(mat.male.cold, 2, function(x) quantile(x, probs = c(0.975)))
+
+# put into data frame to plot
+plot.dat.male.cold <- data.frame(jday = x2.male.cold, 
+                       mean = mean.male.cold, 
+                       lower = lower.male.cold, 
+                       upper = upper.male.cold,
+                       warm_cold = rep("Cold", length(x2.male.cold)))
+
+### Combine Warm and Cold df
+
+plot.dat.male.temp <- data.frame(
+  rbind(plot.dat.male.warm, plot.dat.male.cold)
+)
+
+```
+
+
+# Nestling Mass Throughout Season
+
+Keep only owlets with multiple measurements
+```{r}
+
+length(which(duplicated(mass_climate_n$band))) # 1112 duplicated
+
+length(which(!(duplicated(mass_climate_n$band)))) # 413 not duplicated
+
+duplicated_n <- mass_climate_n %>%
+  group_by(band, year) %>%
+  filter(n()>1)
+
+```
+
+Separate into wet/dry and warm/cold
+```{r}
+
+owlet.wet <- duplicated_n %>%
+  filter(wet_dry == "Wet")
+
+owlet.dry <- duplicated_n %>%
+  filter(wet_dry == "Dry")
+
+owlet.warm <- duplicated_n %>%
+  filter(warm_cold == "Warm")
+
+owlet.cold <- duplicated_n %>%
+  filter(warm_cold == "Cold")
+
+```
+
+
+
+
+## MCP Model
+
+```{r eval=FALSE, include=FALSE}
+
+#glmm <- lmer(data = owlet.wet, formula = mass ~ day + (day | band))
+
+### PRECIP ###
+
+## Global model for wet/dry years:
+m.mass = list(
+  mass ~  1 + (1|band) + day, # slope of seg_1
+  1 + (1|band) ~ 0 + day     # slope of seg_2
+)
+
+
+
+# Run model for wet years
+m.mass.wet = mcp(m.mass, data = owlet.wet, 
+              iter = 8000, adapt = 2000)     #20,000 iter, 4,000 burn-in
+
+# Run model for dry years
+m.mass.dry = mcp(m.mass, data = owlet.dry, 
+              iter = 8000, adapt = 2000)     #20,000 iter, 4,000 burn-in
+
+
+
+### TEMP ###
+
+
+# Run model for warm years
+m.mass.warm = mcp(m.mass, data = owlet.warm, 
+              iter = 8000, adapt = 2000)     #20,000 iter, 4,000 burn-in
+
+# Run model for cold years
+m.mass.cold = mcp(m.mass, data = owlet.cold, 
+              iter = 8000, adapt = 2000)     #20,000 iter, 4,000 burn-in
+
+
+```
+
+
+
+```{r}
+
+### Wet/Dry
+
+# Print summary
+print(m.mass.wet)
+print(m.mass.dry)
+
+# Store as df
+m.mass.wet.df <- data.frame("wet_dry" = "Wet", unclass(summary(m.mass.wet)), check.names = FALSE, stringsAsFactors = FALSE)
+m.mass.wet.df$name <- c("Changepoint", "Changepoint SD", "Slope 1", "Slope 2", "Intercept 1", "Sigma")
+
+
+m.mass.dry.df <- data.frame("wet_dry" = "Dry", unclass(summary(m.mass.dry)), check.names = FALSE, stringsAsFactors = FALSE)
+m.mass.dry.df$name <- c("Changepoint", "Changepoint SD", "Slope 1", "Slope 2", "Intercept 1", "Sigma")
+
+model.output.owlet.precip <- rbind(m.mass.wet.df, m.mass.dry.df)
+model.output.owlet.precip <- rename(model.output.owlet.precip, climate = wet_dry)
+
+
+### Warm/Cold
+
+print(m.mass.warm)
+print(m.mass.cold)
+
+# Store as df
+m.mass.warm.df <- data.frame("warm_cold" = "Warm", unclass(summary(m.mass.warm)), check.names = FALSE, stringsAsFactors = FALSE)
+m.mass.warm.df$name <- c("Changepoint", "Changepoint SD", "Slope 1", "Slope 2", "Intercept 1", "Sigma")
+
+
+m.mass.cold.df <- data.frame("warm_cold" = "Cold", unclass(summary(m.mass.cold)), check.names = FALSE, stringsAsFactors = FALSE)
+m.mass.cold.df$name <- c("Changepoint", "Changepoint SD", "Slope 1", "Slope 2", "Intercept 1", "Sigma")
+
+model.output.owlet.temp <- rbind(m.mass.warm.df, m.mass.cold.df)
+model.output.owlet.temp <- rename(model.output.owlet.temp, climate = warm_cold)
+
+model.output.owlet <- rbind(model.output.owlet.precip, model.output.owlet.temp)
+
+```
+
+
+
+### Evaluate Overlap
+
+Extract posteriors for precipitation:
+
+```{r}
+# extract 3 chains from m.mass.wet
+chain.1.mass.wet <- data.frame(
+  "cp" = as.numeric(m.mass.wet$mcmc_post[[1]][,1]),
+  "seg1" = as.numeric(m.mass.wet$mcmc_post[[1]][,47]),
+  "seg2" = as.numeric(m.mass.wet$mcmc_post[[1]][,48]),
+  "int1" = as.numeric(m.mass.wet$mcmc_post[[1]][,49]),
+  "sigma" = as.numeric(m.mass.wet$mcmc_post[[1]][,50]))
+
+chain.1.mass.wet$chain <- as.factor(1)
+#names(chain.1.mass.wet) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.2.mass.wet <- data.frame(
+  "cp" = as.numeric(m.mass.wet$mcmc_post[[2]][,1]),
+  "seg1" = as.numeric(m.mass.wet$mcmc_post[[2]][,47]),
+  "seg2" = as.numeric(m.mass.wet$mcmc_post[[2]][,48]),
+  "int1" = as.numeric(m.mass.wet$mcmc_post[[2]][,49]),
+  "sigma" = as.numeric(m.mass.wet$mcmc_post[[2]][,50]))
+chain.2.mass.wet$chain <- as.factor(2)
+#names(chain.2.mass.wet) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.3.mass.wet <- data.frame(
+  "cp" = as.numeric(m.mass.wet$mcmc_post[[3]][,1]),
+  "seg1" = as.numeric(m.mass.wet$mcmc_post[[3]][,47]),
+  "seg2" = as.numeric(m.mass.wet$mcmc_post[[3]][,48]),
+  "int1" = as.numeric(m.mass.wet$mcmc_post[[3]][,49]),
+  "sigma" = as.numeric(m.mass.wet$mcmc_post[[3]][,50]))
+chain.3.mass.wet$chain <- as.factor(3)
+#names(chain.3.mass.wet) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+# combine into one wet dataframe
+df.mass.wet <- rbind(chain.1.mass.wet, chain.2.mass.wet, chain.3.mass.wet)
+df.mass.wet$wet_dry <- "Wet"
+
+
+# extract 3 chains from m.mass.dry
+chain.1.mass.dry <- data.frame(
+  "cp" = as.numeric(m.mass.dry$mcmc_post[[1]][,1]),
+  "seg1" = as.numeric(m.mass.dry$mcmc_post[[1]][,64]),
+  "seg2" = as.numeric(m.mass.dry$mcmc_post[[1]][,65]),
+  "int1" = as.numeric(m.mass.dry$mcmc_post[[1]][,66]),
+  "sigma" = as.numeric(m.mass.dry$mcmc_post[[1]][,67]))
+chain.1.mass.dry$chain <- as.factor(1)
+#names(chain.1.mass.dry) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.2.mass.dry <- data.frame(
+  "cp" = as.numeric(m.mass.dry$mcmc_post[[2]][,1]),
+  "seg1" = as.numeric(m.mass.dry$mcmc_post[[2]][,64]),
+  "seg2" = as.numeric(m.mass.dry$mcmc_post[[2]][,65]),
+  "int1" = as.numeric(m.mass.dry$mcmc_post[[2]][,66]),
+  "sigma" = as.numeric(m.mass.dry$mcmc_post[[2]][,67]))
+chain.2.mass.dry$chain <- as.factor(2)
+#names(chain.2.mass.dry) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.3.mass.dry <- data.frame(
+  "cp" = as.numeric(m.mass.dry$mcmc_post[[3]][,1]),
+  "seg1" = as.numeric(m.mass.dry$mcmc_post[[3]][,64]),
+  "seg2" = as.numeric(m.mass.dry$mcmc_post[[3]][,65]),
+  "int1" = as.numeric(m.mass.dry$mcmc_post[[3]][,66]),
+  "sigma" = as.numeric(m.mass.dry$mcmc_post[[3]][,67]))
+chain.3.mass.dry$chain <- as.factor(3)
+#names(chain.3.mass.dry) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+# combine into one dry dataframe
+df.mass.dry <- rbind(chain.1.mass.dry, chain.2.mass.dry, chain.3.mass.dry)
+df.mass.dry$wet_dry <- "Dry"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.mass.precip <- rbind(df.mass.wet, df.mass.dry)
+names(posteriors.mass.precip) <- c("Changepoint", "Segment_1", "Segment_2", "Intercept_1", "Sigma", "Chain", "Wet_Dry")
+  
+
+```
+
+Extract posteriors for temperature:
+
+```{r}
+# extract 3 chains from m.mass.wet
+chain.1.mass.warm <- data.frame(
+  "cp" = as.numeric(m.mass.warm$mcmc_post[[1]][,1]),
+  "seg1" = as.numeric(m.mass.warm$mcmc_post[[1]][,53]),
+  "seg2" = as.numeric(m.mass.warm$mcmc_post[[1]][,54]),
+  "int1" = as.numeric(m.mass.warm$mcmc_post[[1]][,55]),
+  "sigma" = as.numeric(m.mass.warm$mcmc_post[[1]][,56]))
+chain.1.mass.warm$chain <- as.factor(1)
+#names(chain.1.mass.warm) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.2.mass.warm <- data.frame(
+  "cp" = as.numeric(m.mass.warm$mcmc_post[[2]][,1]),
+  "seg1" = as.numeric(m.mass.warm$mcmc_post[[2]][,53]),
+  "seg2" = as.numeric(m.mass.warm$mcmc_post[[2]][,54]),
+  "int1" = as.numeric(m.mass.warm$mcmc_post[[2]][,55]),
+  "sigma" = as.numeric(m.mass.warm$mcmc_post[[2]][,56]))
+chain.2.mass.warm$chain <- as.factor(2)
+#names(chain.2.mass.warm) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.3.mass.warm <- data.frame(
+  "cp" = as.numeric(m.mass.warm$mcmc_post[[3]][,1]),
+  "seg1" = as.numeric(m.mass.warm$mcmc_post[[3]][,53]),
+  "seg2" = as.numeric(m.mass.warm$mcmc_post[[3]][,54]),
+  "int1" = as.numeric(m.mass.warm$mcmc_post[[3]][,55]),
+  "sigma" = as.numeric(m.mass.warm$mcmc_post[[3]][,56]))
+chain.3.mass.warm$chain <- as.factor(3)
+#names(chain.3.mass.warm) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+# combine into one wet dataframe
+df.mass.warm <- rbind(chain.1.mass.warm, chain.2.mass.warm, chain.3.mass.warm)
+df.mass.warm$warm_cold <- "Warm"
+
+
+# extract 3 chains from m.mass.dry
+chain.1.mass.cold <- data.frame(
+  "cp" = as.numeric(m.mass.cold$mcmc_post[[1]][,1]),
+  "seg1" = as.numeric(m.mass.cold$mcmc_post[[1]][,58]),
+  "seg2" = as.numeric(m.mass.cold$mcmc_post[[1]][,59]),
+  "int1" = as.numeric(m.mass.cold$mcmc_post[[1]][,60]),
+  "sigma" = as.numeric(m.mass.cold$mcmc_post[[1]][,61]))
+chain.1.mass.cold$chain <- as.factor(1)
+#names(chain.1.mass.cold) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.2.mass.cold <- data.frame(
+  "cp" = as.numeric(m.mass.cold$mcmc_post[[2]][,1]),
+  "seg1" = as.numeric(m.mass.cold$mcmc_post[[2]][,58]),
+  "seg2" = as.numeric(m.mass.cold$mcmc_post[[2]][,59]),
+  "int1" = as.numeric(m.mass.cold$mcmc_post[[2]][,60]),
+  "sigma" = as.numeric(m.mass.cold$mcmc_post[[2]][,61]))
+chain.2.mass.cold$chain <- as.factor(2)
+#names(chain.2.mass.cold) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+chain.3.mass.cold <- data.frame(
+  "cp" = as.numeric(m.mass.cold$mcmc_post[[3]][,1]),
+  "seg1" = as.numeric(m.mass.cold$mcmc_post[[3]][,58]),
+  "seg2" = as.numeric(m.mass.cold$mcmc_post[[3]][,59]),
+  "int1" = as.numeric(m.mass.cold$mcmc_post[[3]][,60]),
+  "sigma" = as.numeric(m.mass.cold$mcmc_post[[3]][,61]))
+chain.3.mass.cold$chain <- as.factor(3)
+#names(chain.3.mass.cold) <- c("cp", "seg1", "seg2", "int1", "int2", "sigma", "chain")
+
+# combine into one dry dataframe
+df.mass.cold <- rbind(chain.1.mass.cold, chain.2.mass.cold, chain.3.mass.cold)
+df.mass.cold$warm_cold <- "Cold"
+
+
+# combine to create new df for all nest age posteriors
+posteriors.mass.temp <- rbind(df.mass.warm, df.mass.cold)
+names(posteriors.mass.temp) <- c("Changepoint", "Segment_1", "Segment_2", "Intercept_1", "Sigma", "Chain", "Warm_Cold")
+  
+
+```
+
+Now predict values. function fitted() creates a df with means (fitted values) and quantiles.
+```{r}
+# Precipitation
+f.mass.wet <- fitted(m.mass.wet) # get fitted values
+f.mass.wet$wet_dry <- "Wet"
+f.mass.wet <- arrange(f.mass.wet, by = fitted)
+
+predictInterval(m.mass.wet)
+
+p.mass.wet <- predict(m.mass.wet)
+
+f.mass.wet <- f.mass.wet %>%
+  group_by(day) %>%
+  summarise(fitted = mean(fitted), Q2.5 = mean(Q2.5), Q97.5 = mean(Q97.5), wet_dry = "Wet")
+
+f.mass.dry <- fitted(m.mass.dry) # get fitted values
+f.mass.dry$wet_dry <- "Dry"
+f.mass.dry <- arrange(f.mass.dry, by = fitted)
+f.mass.dry <- f.mass.dry %>%
+  group_by(day) %>%
+  summarise(fitted = mean(fitted), Q2.5 = mean(Q2.5), Q97.5 = mean(Q97.5), wet_dry = "Dry")
+
+f.mass.precip <- rbind(f.mass.wet, f.mass.dry) # Merge into one df
+
+# Temperature
+f.mass.warm <- fitted(m.mass.warm) # get fitted values
+f.mass.warm$warm_cold <- "Warm"
+f.mass.warm <- arrange(f.mass.warm, by = fitted)
+f.mass.warm <- f.mass.warm %>%
+  group_by(day) %>%
+  summarise(fitted = mean(fitted), Q2.5 = mean(Q2.5), Q97.5 = mean(Q97.5), warm_cold = "Warm")
+
+f.mass.cold <- fitted(m.mass.cold) # get fitted values
+f.mass.cold$warm_cold <- "Cold"
+f.mass.cold <- arrange(f.mass.cold, by = fitted)
+f.mass.cold <- f.mass.cold %>%
+  group_by(day) %>%
+  summarise(fitted = mean(fitted), Q2.5 = mean(Q2.5), Q97.5 = mean(Q97.5), warm_cold = "Cold")
+
+f.mass.temp <- rbind(f.mass.warm, f.mass.cold) # Merge into one df
+
+```
+
+Create df with slope_1, slope_2, and cp quantiles:
+```{r}
+
+## Custom function to get quantiles (prob) from a given vector (vec):
+getQuant <- function(vec, prob){
+  quantile(vec, probs = prob, names = FALSE)
+  }
+
+### Apply getQuant for 80% and 95% and output data.frame
+
+## Precipitation
+df.quant.precip <- cbind(t(data.frame(
+  lower_80 = apply(X = df.mass.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.mass.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.mass.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.mass.wet[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("wet_cp", "wet_seg1", "wet_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.mass.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.mass.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.mass.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.mass.dry[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("dry_cp", "dry_seg1", "dry_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.precip <- df.quant.precip[, c("wet_cp", "dry_cp", "wet_seg1", "dry_seg1", "wet_seg2", "dry_seg2")]
+
+
+
+## Temperature
+
+df.quant.temp <- cbind(t(data.frame(
+  lower_80 = apply(X = df.mass.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.mass.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.mass.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.mass.warm[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("warm_cp", "warm_seg1", "warm_seg2"))),
+t(data.frame(
+  lower_80 = apply(X = df.mass.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.1),
+  upper_80 = apply(X = df.mass.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.9),
+  lower_95 = apply(X = df.mass.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.025),
+  upper_95 = apply(X = df.mass.cold[,1:3], MARGIN = 2, FUN = getQuant, prob = 0.975), row.names = c("cold_cp", "cold_seg1", "cold_seg2")))
+)
+
+# Reorder columns for ease of viewing
+df.quant.temp <- df.quant.temp[, c("warm_cp", "cold_cp", "warm_seg1", "cold_seg1", "warm_seg2", "cold_seg2")]
+
+df.quant.nestling <- t(cbind(df.quant.precip, df.quant.temp))
+
+
+```
+
