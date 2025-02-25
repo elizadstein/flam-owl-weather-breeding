@@ -16,7 +16,7 @@ library(tidyverse)
 
 ```{r}
 
-propClimate <- read.csv("labor_data.csv")
+propClimate <- read.csv("../data/labor_data.csv")
 
 # Create two data sets, one for wet years and one for dry years
 pd.wet <- propClimate %>%

@@ -1,9 +1,3 @@
-### FOR HPC: qsub -I -l walltime=00:90:00,nodes=1:ppn=20 -A hpc_taylorhpc
-### [estei18@mike002 ~]$ export R_LIBS_USER=/ddnA/work/estei18/packages/R/libraries
-### [estei18@mike002 ~]$ echo $R_LIBS_USER
-### module load r/4.1.2/gcc-9.3.0
-
-
 library(R2jags)
 library(tidyverse)
 library(lubridate)
@@ -12,7 +6,7 @@ library(tidybayes)
 
 ### READ IN DATA ###
 
-mass_climate <- read.csv("mass_data.csv")
+mass_climate <- read.csv("../data/mass_data.csv")
 
 # Split into all adult (a), adult male (m), adult female (f), and nestling (n)
 mass_climate_a <- filter(mass_climate, age == "AD" | age == "U")
@@ -256,15 +250,15 @@ df.quant.nestling <- t(cbind(df.quant.precip, df.quant.temp))
 
 ### WRITE MODEL OUTPUTS ###
 
-saveRDS(m.mass.wet, "m_mass_wet.rda")
-saveRDS(m.mass.dry, "m_mass_dry.rda")
-saveRDS(m.mass.warm, "m_mass_warm.rda")
-saveRDS(m.mass.cold, "m_mass_cold.rda")
-
-write.csv(f.mass.wet, "f_mass_wet.csv")
-write.csv(f.mass.dry, "f_mass_dry.csv")
-write.csv(f.mass.warm, "f_mass_warm.csv")
-write.csv(f.mass.cold, "f_mass_cold.csv")
-
-write.csv(df.quant.temp, "df_quant_temp.csv")
-write.csv(df.quant.precip, "df_quant_precip.csv")
+# saveRDS(m.mass.wet, "m_mass_wet.rda")
+# saveRDS(m.mass.dry, "m_mass_dry.rda")
+# saveRDS(m.mass.warm, "m_mass_warm.rda")
+# saveRDS(m.mass.cold, "m_mass_cold.rda")
+# 
+# write.csv(f.mass.wet, "f_mass_wet.csv")
+# write.csv(f.mass.dry, "f_mass_dry.csv")
+# write.csv(f.mass.warm, "f_mass_warm.csv")
+# write.csv(f.mass.cold, "f_mass_cold.csv")
+# 
+# write.csv(df.quant.temp, "df_quant_temp.csv")
+# write.csv(df.quant.precip, "df_quant_precip.csv")

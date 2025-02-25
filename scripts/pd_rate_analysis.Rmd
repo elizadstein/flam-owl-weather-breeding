@@ -17,7 +17,7 @@ library(tidyverse)
 
 ## Load Data
 ```{r}
-pd <- read.csv("pd_rate_data.csv")
+pd <- read.csv("../data/pd_rate_data.csv")
 
 
 # Create two data sets, one for wet years (>= 286.6605 mm) and one for dry years (<286.6605 mm)

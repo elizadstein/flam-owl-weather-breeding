@@ -24,7 +24,7 @@ library(gridExtra)
 
 ```{r}
 
-mass_climate <- read.csv("mass_data.csv")
+mass_climate <- read.csv("../data/mass_data.csv")
 
 
 # Split into all adult (a), adult male (m), adult female (f), and nestling (n)
@@ -124,7 +124,7 @@ sink()
 
 ## Wet vs. Dry Years
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 
 ## Wet Years: Female
 n.groups <- as.numeric(length(unique(female.wet$band)))
@@ -236,7 +236,7 @@ out.male.dry <- jags(data = win.data, inits = inits, parameters = params, model 
 
 ## Warm vs. Cold Years
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 
 ## Warm Years: Female
 n.groups <- as.numeric(length(unique(female.warm$band)))
@@ -345,7 +345,6 @@ out.male.cold <- jags(data = win.data, inits = inits, parameters = params, model
 
 ```
 
-## Start Here
 ```{r}
 
 #saveRDS(out.female.wet, "out_female_wet.rda")
@@ -357,14 +356,6 @@ out.male.cold <- jags(data = win.data, inits = inits, parameters = params, model
 #saveRDS(out.male.warm, "out_male_warm.rda")
 #saveRDS(out.male.cold, "out_male_cold.rda")
 
-out.female.wet <- readRDS("out_female_wet.rda")
-out.female.dry <- readRDS("out_female_dry.rda")
-out.male.wet <- readRDS("out_male_wet.rda")
-out.male.dry <- readRDS("out_male_dry.rda")
-out.female.warm <- readRDS("out_female_warm.rda")
-out.female.cold <- readRDS("out_female_cold.rda")
-out.male.warm <- readRDS("out_male_warm.rda")
-out.male.cold <- readRDS("out_male_cold.rda")
 
 print(out.female.wet, dig = 3) 
 print(out.female.dry, dig = 3) 
@@ -619,7 +610,7 @@ lm.output.male <- t(data.frame(
 # combine dfs
 lm.output.all <- rbind(lm.output.female[1:9,], lm.output.male[2:9,])
 
-#write.csv(lm.output.all, "model_output_adult_mass.csv")
+#write.csv(lm.output.all, "../models/model_output_adult_mass.csv")
 
 ```
 
@@ -1071,7 +1062,7 @@ owlet.cold <- duplicated_n %>%
 
 ## MCP Model
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 
 #glmm <- lmer(data = owlet.wet, formula = mass ~ day + (day | band))
 
@@ -1113,10 +1104,6 @@ m.mass.cold = mcp(m.mass, data = owlet.cold,
 #saveRDS(m.mass.warm, "m_mass_warm.rda")
 #saveRDS(m.mass.cold, "m_mass_cold.rda")
 
-m.mass.wet <- readRDS("m_mass_wet.rda")
-m.mass.dry <- readRDS("m_mass_dry.rda")
-m.mass.warm <- readRDS("m_mass_warm.rda") 
-m.mass.cold <- readRDS("m_mass_cold.rda")
 ```
 
 
@@ -1159,7 +1146,6 @@ model.output.owlet.temp <- rename(model.output.owlet.temp, climate = warm_cold)
 
 model.output.owlet <- rbind(model.output.owlet.precip, model.output.owlet.temp)
 
-#write.csv(model.output.owlet, "C:/Users/eliza/OneDrive - Louisiana State University/Documents/Owl_PD/Tables/model_output_owlet_mass.csv")
 ```
 
 
@@ -1414,7 +1400,6 @@ df.quant.temp <- df.quant.temp[, c("warm_cp", "cold_cp", "warm_seg1", "cold_seg1
 
 df.quant.nestling <- t(cbind(df.quant.precip, df.quant.temp))
 
-#write.csv(df.quant.nestling, "C:/Users/eliza/OneDrive - Louisiana State University/Documents/Owl_PD/Tables/quantiles_nestling_mass.csv")
 
 ```
 
@@ -1702,8 +1687,6 @@ nrow(mass.n.dry)
 nrow(mass.n.warm)
 nrow(mass.n.cold)
 
-# write to csv
 
-#(yearly.mass.adult, "Tables/yearly_mass_adult.csv")
 
 ```

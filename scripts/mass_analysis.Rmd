@@ -22,7 +22,7 @@ library(tidybayes)
 
 ```{r}
 
-mass_climate <- read.csv("mass_data.csv")
+mass_climate <- read.csv("../data/mass_data.csv")
 
 
 # Split into all adult (a), adult male (m), adult female (f), and nestling (n)

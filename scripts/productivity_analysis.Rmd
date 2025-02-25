@@ -16,7 +16,7 @@ library(tidyverse)
 ## Load PD Data
 
 ```{r}
-prod.climate <- read.csv("productivity_data.csv")
+prod.climate <- read.csv("../data/productivity_data.csv")
 
 # Separate into wet, dry, warm, and cold
 prod.climate.wet <- filter(prod.climate, wet_dry == "Wet")
